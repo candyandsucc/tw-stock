@@ -1,12 +1,7 @@
 name: 每日盤後更新
 on:
   schedule:
-    # 週一至週五 台北 (UTC+8) 14:00、15:00、16:30、18:00、21:00
-    - cron: "0 6 * * 1-5"
-    - cron: "0 7 * * 1-5"
-    - cron: "30 8 * * 1-5"
-    - cron: "0 10 * * 1-5"
-    - cron: "0 13 * * 1-5"
+    - cron: "0 14 * * 1-5"   # 週一至週五 台北 (UTC+8) 22:00
   workflow_dispatch:
 permissions:
   contents: write
