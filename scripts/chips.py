@@ -39,7 +39,7 @@ def cached(name, fetch):
 # ---- 三大法人（單位：股；外資含外資自營商） ----
 def twse_inst(d):
     j = get(f"https://www.twse.com.tw/rwd/zh/fund/T86?date={d.replace('-','')}&selectType=ALLBUT0999&response=json")
-    if not j or j.get("stat") != "OK": return None
+    if not j or j.get("stat") != "OK" or j.get("date") != d.replace("-", ""): return None
     return {r[0].strip(): [round((num(r[4]) or 0) + (num(r[7]) or 0)), num(r[10]), num(r[11])] for r in j["data"]}
 
 def tpex_inst(d):
@@ -51,7 +51,7 @@ def tpex_inst(d):
 # ---- 融資（單位：張）：今日餘額、前日餘額 ----
 def twse_margin(d):
     j = get(f"https://www.twse.com.tw/rwd/zh/marginTrading/MI_MARGN?date={d.replace('-','')}&selectType=ALL&response=json")
-    if not j or j.get("stat") != "OK": return None
+    if not j or j.get("stat") != "OK" or j.get("date") != d.replace("-", ""): return None
     t = [t for t in j["tables"] if t.get("fields") and t["fields"][0] == "代號"]
     if not t or not t[0]["data"]: return None
     return {r[0].strip(): [num(r[6]), num(r[5])] for r in t[0]["data"]}

@@ -32,15 +32,34 @@ def roc(s):  # 1151021 or 115/10/21 -> 2026-10-21
 now = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).isoformat(timespec="seconds")
 stocks = {}
 # --- 上市 ---
-twse = get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL") or []
+# 優先用帶日期參數的 MI_INDEX（盤後即時），並核對回應日期；OpenAPI STOCK_DAY_ALL 常延遲一天，僅作備援
 twse_date = None
-for r in twse:
-    c = num(r["ClosingPrice"])
-    if c is None: continue
-    twse_date = roc(r["Date"])
-    stocks[r["Code"]] = dict(code=r["Code"], name=r["Name"].strip(), market="上市", etf=r["Code"].startswith("00"),
-        date=twse_date, open=num(r["OpeningPrice"]), high=num(r["HighestPrice"]), low=num(r["LowestPrice"]), close=c,
-        change=num(r["Change"]), volume=num(r["TradeVolume"]), value=num(r["TradeValue"]), src="證交所")
+_d = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).date()
+for _ in range(7):
+    if _d.weekday() < 5:
+        j = get(f"https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={_d:%Y%m%d}&type=ALLBUT0999&response=json"); time.sleep(SLEEP)
+        if j and j.get("stat") == "OK" and j.get("date") == f"{_d:%Y%m%d}":
+            t = [t for t in j.get("tables", []) if t.get("fields") and t["fields"][0] == "證券代號"]
+            if t and t[0].get("data"):
+                twse_date = _d.isoformat()
+                for r in t[0]["data"]:
+                    c = num(r[8])
+                    if c is None: continue
+                    sign = -1 if "-" in re.sub(r"<[^>]+>", "", r[9]) or "green" in r[9] else 1
+                    ch = num(r[10]); ch = sign * ch if ch is not None else None
+                    stocks[r[0].strip()] = dict(code=r[0].strip(), name=r[1].strip(), market="上市", etf=r[0].startswith("00"), date=twse_date,
+                        open=num(r[5]), high=num(r[6]), low=num(r[7]), close=c, change=ch, volume=num(r[2]), value=num(r[4]), src="證交所")
+                break
+    _d -= dt.timedelta(days=1)
+if not twse_date:
+    for r in get("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL") or []:
+        c = num(r["ClosingPrice"])
+        if c is None: continue
+        twse_date = roc(r["Date"])
+        stocks[r["Code"]] = dict(code=r["Code"], name=r["Name"].strip(), market="上市", etf=r["Code"].startswith("00"),
+            date=twse_date, open=num(r["OpeningPrice"]), high=num(r["HighestPrice"]), low=num(r["LowestPrice"]), close=c,
+            change=num(r["Change"]), volume=num(r["TradeVolume"]), value=num(r["TradeValue"]), src="證交所")
+print("twse date", twse_date, sum(1 for v in stocks.values() if v["market"] == "上市"))
 # --- 上櫃 ---
 tpex = get("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes") or []
 tpex_date = None
@@ -65,7 +84,7 @@ while len(inst_dates) < 5 and tries < 12:
     tries += 1
     if day.weekday() < 5:
         j = get(f"https://www.twse.com.tw/rwd/zh/fund/T86?date={day:%Y%m%d}&selectType=ALLBUT0999&response=json"); time.sleep(SLEEP)
-        if j and j.get("stat") == "OK":
+        if j and j.get("stat") == "OK" and j.get("date") == f"{day:%Y%m%d}":
             ds = day.isoformat(); inst_dates.append(ds)
             for r in j["data"]:
                 code = r[0].strip()
@@ -132,7 +151,7 @@ for i, code in enumerate(targets):
 
 meta = dict(updated=now, twseDate=twse_date, tpexDate=tpex_date, instDates=inst_dates,
             counts=dict(twse=sum(1 for s in stocks.values() if s["market"] == "上市"), tpex=sum(1 for s in stocks.values() if s["market"] == "上櫃")),
-            sources=dict(twse="https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", tpex="https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
+            sources=dict(twse="https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX", tpex="https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
                          inst="https://www.twse.com.tw/rwd/zh/fund/T86", twseHist="https://www.twse.com.tw/rwd/zh/afterTrading/STOCK_DAY",
                          tpexHist="https://www.tpex.org.tw/www/zh-tw/afterTrading/tradingStock"))
 (OUT / "stocks.json").write_text(json.dumps(dict(meta=meta, stocks=list(stocks.values())), ensure_ascii=False))
