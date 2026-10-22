@@ -159,3 +159,7 @@ meta = dict(updated=now, twseDate=twse_date, tpexDate=tpex_date, instDates=inst_
 (OUT / "stocks.json").write_text(json.dumps(dict(meta=meta, stocks=list(stocks.values())), ensure_ascii=False))
 (OUT / "institutional.json").write_text(json.dumps(dict(dates=inst_dates, src="證交所 T86", data=inst), ensure_ascii=False))
 print("done", meta)
+
+# --- 產業別、三大法人近 20 日（上市+上櫃）、融資、ETF 持股 ---
+import sys; sys.path.insert(0, str(ROOT / "scripts"))
+import chips; chips.main()
