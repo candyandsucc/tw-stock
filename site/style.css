@@ -62,3 +62,4 @@ details summary{cursor:pointer;color:#6b778c;font-size:12px;margin-top:8px}.meth
 .levels.l3{grid-template-columns:1.3fr 1fr 1fr}.tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}.tags i{font-style:normal;font-size:10px;background:#eef2f8;color:#6b778c;border-radius:4px;padding:1px 6px}
 .lvrow+.lvrow{border-top:1px dashed #e8ecf3;padding-top:8px}
 .vl{margin:8px 0 0;padding-left:18px;color:#6b778c;font-size:12px;line-height:1.8}
+.disclaimer{color:#7f8ba0}
