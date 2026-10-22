@@ -6,8 +6,8 @@ OUT = ROOT / "site" / "data"; HIS = OUT / "history"; SNAP = ROOT / "snapshots"
 for p in (OUT, HIS, SNAP): p.mkdir(parents=True, exist_ok=True)
 UA = {"User-Agent": "Mozilla/5.0 tw-stock-lab"}
 TOP_N = int(os.environ.get("TOP_N", "30"))          # 每市場依成交金額取前 N 檔建立歷史
-MONTHS = int(os.environ.get("MONTHS", "4"))
-EXTRA = os.environ.get("EXTRA", "2330,0050,0056,00878,2317,2454,6488,5347,8299,3105").split(",")
+MONTHS = int(os.environ.get("MONTHS", "6"))
+EXTRA = os.environ.get("EXTRA", "2330,0050,0056,00878,2317,2454,6488,5347,8299,3105,8046,2449,2344").split(",")
 SLEEP = float(os.environ.get("SLEEP", "1.3"))
 
 def get(url, tries=3):
@@ -107,30 +107,9 @@ def history(s):
 
 def sma(arr, n): return round(sum(arr[-n:]) / n, 2) if len(arr) >= n else None
 
-def levels(h, close):
-    """支撐壓力價格帶：波段高低點(左右各3根) + 經典樞紐點(P,S1,S2,R1,R2) + MA20/MA60，候選價位相距 1.5% 內合併為價格帶。"""
-    h = h[-120:]; cands = []
-    for i in range(3, len(h) - 3):
-        hi, lo = h[i][2], h[i][3]
-        if all(hi >= h[k][2] for k in range(i-3, i+4)): cands.append((hi, "波段高點", h[i][0]))
-        if all(lo <= h[k][3] for k in range(i-3, i+4)): cands.append((lo, "波段低點", h[i][0]))
-    H, L, C = h[-1][2], h[-1][3], h[-1][4]; P = (H + L + C) / 3
-    for v, n in ((P, "樞紐 P"), (2*P-H, "樞紐 S1"), (P-(H-L), "樞紐 S2"), (2*P-L, "樞紐 R1"), (P+(H-L), "樞紐 R2")):
-        cands.append((round(v, 2), n, h[-1][0]))
-    cl = [x[4] for x in h]
-    for n in (20, 60):
-        m = sma(cl, n)
-        if m: cands.append((m, f"MA{n}", h[-1][0]))
-    def bands(cs):
-        cs = sorted(cs); cl = []
-        for c in cs:
-            if cl and c[0] <= cl[-1][0][0] * 1.015: cl[-1].append(c)
-            else: cl.append([c])
-        return [dict(low=round(min(x[0] for x in g), 2), high=round(max(x[0] for x in g), 2), n=len(g),
-                     basis=sorted({x[1] for x in g}), last=max(x[2] for x in g)) for g in cl]
-    sup = sorted(bands([c for c in cands if c[0] < close]), key=lambda b: -b["high"])[:2]
-    res = sorted(bands([c for c in cands if c[0] > close]), key=lambda b: b["low"])[:2]
-    return dict(support=sup, resistance=res)
+import sys as _s; _s.path.insert(0, str(ROOT / "scripts"))
+from levels import compute as _lv
+def levels(h, close): return _lv(h, close)
 
 ranked = []
 for mk in ("上市", "上櫃"):
@@ -142,11 +121,11 @@ for i, code in enumerate(targets):
     s = stocks[code]; h = history(s)
     if not h: continue
     cl = [x[4] for x in h]; vol = [x[5] or 0 for x in h]
-    avg5 = sum(vol[-6:-1]) / 5 if len(vol) >= 6 else None
+    avg5 = sum(vol[-20:]) / 20 if len(vol) >= 20 else None  # 近 20 日均量（含當日）
     out = dict(code=code, name=s["name"], market=s["market"], src=s["src"], date=h[-1][0], updated=now,
                rows=h, ma5=sma(cl, 5), ma20=sma(cl, 20), ma60=sma(cl, 60),
                volRatio=round(vol[-1] / avg5, 2) if avg5 else None, levels=levels(h, cl[-1]) if len(h) >= 10 else None,
-               method="波段高低點(左右各3日)+樞紐點+MA20/60，1.5%內合併為價格帶")
+               method="結構法")
     (HIS / f"{code}.json").write_text(json.dumps(out, ensure_ascii=False))
     s["hasHistory"] = True
     print(i + 1, code, len(h))

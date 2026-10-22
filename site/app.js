@@ -44,10 +44,17 @@ function chart(rows){
   return `<svg viewBox="0 0 ${w} ${h+vh+20}" width="100%">${grid}<path d="${path(R.map(r=>r[4]))}L${X(R.length-1)},${h}L${X(0)},${h}Z" fill="#edf2ff" opacity=".6"/>${lines.map(([c,a],k)=>`<path d="${path(a)}" fill="none" stroke="${c}" stroke-width="${k?1.2:2}" ${k?'stroke-dasharray="4 2"':''}/>`).join('')}${bars}
   <text x="${p}" y="${h+vh+16}" font-size="10" fill="#98a2b3">${dfmt(R[0][0])}</text><text x="${w-p}" y="${h+vh+16}" font-size="10" fill="#98a2b3" text-anchor="end">${dfmt(R.at(-1)[0])}</text></svg>`;
 }
-const lvl=(b,kind,i,close)=>!b?`<div class="level ${kind}"><small>${kind==='support'?'◇':'↗'} 第${i}${kind==='support'?'支撐':'壓力'}</small><strong>—</strong><p>近 120 日內無符合價位（可能已創新高/新低）</p></div>`:
- `<div class="level ${kind}"><small>${kind==='support'?'◇':'↗'} 第${i}${kind==='support'?'支撐':'壓力'}</small><strong>${fmt(kind==='support'?b.high:b.low)}</strong>
- <div class="priceband"><small>價格帶</small><b>${fmt(b.low)}–${fmt(b.high)}</b><small>${b.n>1?b.n+' 個價位合併':'單一價位，未形成區間'}</small></div>
- <span>距收盤 ${sg(((kind==='support'?b.high:b.low)/close-1))}${fmt(((kind==='support'?b.high:b.low)/close-1)*100)}%</span><p>${b.basis.join('、')} · 最近 ${dfmt(b.last)}</p></div>`;
+const band=b=>b.low!==b.high?`<em>價格帶 ${fmt(b.low)}–${fmt(b.high)}</em>`:'';
+const tags=b=>`<div class="tags">${b.basis.map(x=>`<i>${x}</i>`).join('')}</div>`;
+const lrow=(lab,b)=>`<div class="lvrow"><div><span>${lab}</span>${tags(b)}</div><div><strong>${fmt(b.price)}</strong>${band(b)}<em>距現價 ${sg(b.dist)}${fmt(b.dist,1)}%</em></div></div>`;
+const NA=(st)=>`<strong class="na">${st||'尚未形成'}</strong><p>${st==='資料不足'?'來源資料不足以計算。':'目前價格結構還沒有出現對應價位，不以公式推算補值。'}</p>`;
+function lvcards(L,cf,close,H){const S=L.support,R=L.resistance,st=L.status;
+ const sup=`<div class="level support"><small>◇ 支撐觀察</small>${S.length?S.map((b,i)=>lrow(i?`第二支撐｜${b.tier}`:`${b.tier}支撐`,b)).join(''):NA(st)}<p>現價之下最接近的真實結構價位；跌破後結構轉弱；距離以現價為基準計算。</p></div>`;
+ const r1=R[0],r2=R[1];const newHigh=!r1&&H&&close>=Math.max(...H.rows.map(r=>r[2]));
+ const c1=`<div class="level resist"><small>⚡ ${cf?'關鍵突破／壓力共振區':'第一壓力'}</small>${r1?lrow(cf?'關鍵突破／壓力共振區':'第一壓力',r1)+`<p>${cf?'此處同時是突破觀察位與壓力共振區，站上與否是觀察點，不是追價目標。':'現價上方最近、已確認的有效壓力結構；站上與否是觀察點，不是追價目標。'}</p>`:newHigh&&L.limits?`<strong class="na">${fmt(L.limits.up)}</strong><p>創新高，上方無歷史結構；顯示明日漲停參考價（漲跌幅限制，非結構價位）。</p>`:NA(st)}</div>`;
+ const c2=`<div class="level resist"><small>🔥 第二壓力</small>${r2?lrow(r2.tier,r2)+`<p>${r2.tier==='中期壓力'?'第一壓力帶之上、下一個獨立的結構已超過 +10%，保留顯示並改標為中期壓力。':'第一壓力帶之上、下一個獨立的壓力結構。'}</p>`:NA(st)}</div>`;
+ return `<div class="levels l3">${sup}${c1}${c2}</div>`;}
+function confluence(H,L){const r1=L.resistance[0];if(!r1)return false;const hi=Math.max(...H.rows.slice(-10,-1).map(r=>r[2]));return Math.abs(hi/r1.price-1)<=0.01||(hi>=r1.low&&hi<=r1.high);}
 async function pick(code){
   sel=code;location.hash=code;render();const s=ALL.find(x=>x.code===code);if(!s)return;
   let H=null;if(s.hasHistory){try{H=await fetch(`data/history/${code}.json`).then(r=>r.ok?r.json():null)}catch(e){}}window._H=H;
@@ -62,9 +69,8 @@ async function pick(code){
   <div class="ma"><span><i style="background:#f0a020"></i>MA5 <b>${fmt(H.ma5)}</b></span><span><i style="background:#d4483b"></i>MA20 <b>${fmt(H.ma20)}</b></span><span><i style="background:#2c9a6f"></i>MA60 <b>${fmt(H.ma60)}</b></span><span>量比 <b>${vr20(H.rows)}</b></span></div>
   <div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
   <div class="sectionlabel"><h3>接下來，看哪裡？</h3><span>價格結構觀察 · 依 ${dfmt(H.date)} 收盤 · 來源 ${s.src}</span></div>`;
-  if(L){html+=`<div class="levels">${lvl(L.support[0],'support',1,close)}${lvl(L.support[1],'support',2,close)}${lvl(L.resistance[0],'resist',1,close)}${lvl(L.resistance[1],'resist',2,close)}</div>`;
-  }
-  }else html+=`<div class="card"><h3>價格走勢 / 支撐壓力<span>尚無歷史</span></h3><p class="note2">此股票目前不在每日歷史抓取範圍（主要成交金額前段＋預設清單），因此暫無走勢、均線與支撐壓力。系統每日累積收盤快照，資料足夠後會自動顯示。</p></div>`;
+  if(L){const cf=confluence(H,L);html+=lvcards(L,cf,close,H)+(L.limits?`<p class="note2">漲跌停參考（依漲跌幅限制，非結構價位）：明日漲停 ${fmt(L.limits.up)} · 跌停 ${fmt(L.limits.down)}</p>`:'');}
+  }else html+=`<div class="card"><h3>價格走勢 / 支撐壓力<span>尚無歷史</span></h3><p class="note2">此股票目前不在每日歷史抓取範圍（主要成交金額前段＋預設清單），因此暫無走勢、均線與支撐壓力（資料不足）。系統每日累積收盤快照，資料足夠後會自動顯示。</p></div>`;
   html+=`<div id="research"><div class="empty">正在彙整產業、法人、融資與 ETF 資料…</div></div>`;
   $('#detail').innerHTML=html;
   const [C,E]=await Promise.all([CH||(CH=fetch('data/chips.json').then(r=>r.json())),EF||(EF=fetch('data/etf.json').then(r=>r.json()))]);
@@ -72,7 +78,7 @@ async function pick(code){
 }
 let CH=null,EF=null,etfTab='全部';
 const IND={"01":"水泥工業","02":"食品工業","03":"塑膠工業","04":"紡織纖維","05":"電機機械","06":"電器電纜","07":"化學生技醫療","08":"玻璃陶瓷","09":"造紙工業","10":"鋼鐵工業","11":"橡膠工業","12":"汽車工業","14":"建材營造","15":"航運業","16":"觀光餐旅","17":"金融保險","18":"貿易百貨","19":"綜合","20":"其他","21":"化學工業","22":"生技醫療","23":"油電燃氣","24":"半導體業","25":"電腦及週邊設備","26":"光電業","27":"通信網路業","28":"電子零組件業","29":"電子通路業","30":"資訊服務業","31":"其他電子業","32":"文化創意業","33":"農業科技業","34":"電子商務","35":"綠能環保","36":"數位雲端","37":"運動休閒","38":"居家生活"};
-function vr20(rows){const v=rows.map(r=>r[5]||0);if(v.length<21)return '—';const a=v.slice(-21,-1).reduce((x,y)=>x+y)/20;return a?fmt(v.at(-1)/a)+' 倍':'—';}
+function vr20(rows){const v=rows.map(r=>r[5]||0);if(v.length<20)return '—';const a=v.slice(-20).reduce((x,y)=>x+y)/20;return a?fmt(v.at(-1)/a)+' 倍':'—';}
 const z=v=>v==null?'—':(v>0?'+':'')+fmt(v,1);
 function research(s,H,C,E){
   const close=s.close;let o='';
@@ -85,16 +91,19 @@ function research(s,H,C,E){
   const tot=r=>r.x?(r.x[0]+r.x[1]+r.x[2])/1000:0;const sum=D.reduce((a,r)=>a+tot(r),0);const buy=D.filter(r=>tot(r)>0).length,sell=D.filter(r=>tot(r)<0).length;
   const cat=i=>D.reduce((a,r)=>a+(r.x?r.x[i]:0),0)/1000;
   // 綜合判讀
-  o+=`<div class="rcard verdict"><div class="rc-head"><h3>綜合判讀</h3><span>${dfmt(s.date)} 收盤</span></div><h4>${indName||(s.etf?'ETF':'產業資料待確認')}${rk?` · 同日成交金額第 ${rk} 名`:''}</h4><p>個股成交 ${fmt(s.value/1e8)} 億元。${D.length?`近 ${D.length} 日法人買超 ${buy} 日，合計 ${z(sum)} 張。`:'官方資料未提供此股票的法人買賣超。'}</p></div>`;
+  const vrv=H&&H.rows.length>=20?(H.rows.at(-1)[5]/(H.rows.slice(-20).reduce((a,r)=>a+(r[5]||0),0)/20)):null;const lastI=raw.at(-1);const fd=lastI&&got.includes(days.at(-1))?lastI[0]/1000:null;
+  const vline=vrv==null?'':`<li><b>${vrv<1?'成交量縮小':'成交量放大'}</b> 成交量約為近 20 日均量的 ${fmt(vrv)} 倍。</li>`;
+  const fline=fd==null?'':`<li><b>${fd>=0?'外資買超':'外資賣超'}</b> 外資（含陸資、外資自營商）${dfmt(days.at(-1))} 合計 ${fmt(Math.abs(fd),0)} 張。</li>`;
+  o+=`<div class="rcard verdict"><div class="rc-head"><h3>綜合判讀</h3><span>${dfmt(s.date)} 收盤</span></div><h4>${indName||(s.etf?'ETF':'產業資料待確認')}${rk?` · 同日成交金額第 ${rk} 名`:''}</h4><p>個股成交 ${fmt(s.value/1e8)} 億元。${D.length?`近 ${D.length} 日法人買超 ${buy} 日，合計 ${z(sum)} 張。`:'官方資料未提供此股票的法人買賣超。'}</p><ul class="vl">${vline}${fline}</ul></div>`;
   o+=`<div class="rcard"><div class="rc-head"><h3>產業熱度</h3><span>依官方產業分類</span></div>${indName?`<div class="sector-line"><span>${indName}</span><b>第 ${rk} / ${ranks.length}</b><strong>${fmt(agg[s.ind].v/1e8)} 億</strong></div>
    <p class="rc-note">${dfmt(s.date)} 同日已取得行情，分類內 ${agg[s.ind].n} 檔。排名依${s.market}成交金額，不代表資金淨流入。來源：${s.market==='上市'?'證交所 t187ap03_L':'櫃買中心 mopsfin_t187ap03_O'}（產業別）＋ 每日收盤行情。</p>`:`<p class="rc-note">官方資料未提供此證券的產業別（ETF 等不列入公司基本資料）。</p>`}
    <p class="rc-note sep">題材資金流（如 GaN）：尚無可驗證的題材名單及計算來源。</p></div>`;
   // 位置
   const L=H&&H.levels;const s1=L&&L.support[0],r1=L&&L.resistance[0];
   o+=`<div class="rcard"><div class="rc-head"><h3>支撐壓力位置</h3><span>依 ${dfmt(H?H.date:s.date)} 收盤</span></div>`;
-  if(s1&&r1){const pos=(close-s1.high)/(r1.low-s1.high)*100;o+=`<div class="track"><i style="left:${Math.max(0,Math.min(100,pos))}%"></i></div>
-   <div class="pos3"><div><small>第一支撐</small><strong class="down">${fmt(s1.high)}</strong><em>價格帶 ${fmt(s1.low)}–${fmt(s1.high)}</em></div><div><small>收盤價</small><strong>${fmt(close)}</strong><em>位於區間 ${fmt(pos,1)}%</em></div><div><small>第一壓力</small><strong class="up">${fmt(r1.low)}</strong><em>價格帶 ${fmt(r1.low)}–${fmt(r1.high)}</em></div></div>
-   <p class="rc-note">距支撐 ${fmt((close/s1.high-1)*100,1)}% · 距壓力 ${fmt((r1.low/close-1)*100,1)}%。此圖沿用上方歷史轉折價位，不另外推算「交界」價格。</p>`;}else o+=`<p class="rc-note">支撐或壓力資料不足，無法繪製位置圖。</p>`;o+='</div>';
+  if(s1&&r1){const pos=(close-s1.price)/(r1.price-s1.price)*100;o+=`<div class="track"><i style="left:${Math.max(0,Math.min(100,pos))}%"></i></div>
+   <div class="pos3"><div><small>第一支撐</small><strong class="down">${fmt(s1.price)}</strong><em>價格帶 ${fmt(s1.low)}–${fmt(s1.high)}</em></div><div><small>收盤價</small><strong>${fmt(close)}</strong><em>位於區間 ${fmt(pos,1)}%</em></div><div><small>第一壓力</small><strong class="up">${fmt(r1.price)}</strong><em>價格帶 ${fmt(r1.low)}–${fmt(r1.high)}</em></div></div>
+   <p class="rc-note">距支撐 ${fmt(s1.dist,1)}% · 距壓力 ${fmt(r1.dist,1)}%。此圖沿用上方歷史轉折價位，不另外推算「交界」價格。</p>`;}else o+=`<p class="rc-note">支撐或壓力資料不足，無法繪製位置圖。</p>`;o+='</div>';
   // 法人 20 日
   const mx=Math.max(1,...D.map(r=>Math.abs(tot(r))));const srcI=s.market==='上市'?C.sources.instTwse:C.sources.instTpex;
   o+=`<div class="rcard"><div class="rc-head"><h3>三大法人 · 近 20 日</h3><span>單位：張</span></div>`;
@@ -125,8 +134,8 @@ function research(s,H,C,E){
    <details><summary>查看涵蓋清單與資料限制</summary><table><tr><th>ETF</th><th>發行</th><th>基準日</th><th>比較日</th><th>持股數</th></tr>${F.map(f=>`<tr><td><a href="${f.url}" target="_blank" rel="noreferrer">${f.code} ${f.name}</a></td><td>${f.issuer}</td><td>${f.date||'取得失敗'}</td><td>${f.prevDate||'—'}</td><td>${f.n}</td></tr>`).join('')}</table>
    <p class="rc-note">00981A、國泰、富邦及其他尚未列入的 ETF 未接入，不會推定為未持有。群益可回查前期，元大從首次成功收錄開始累積歷史；比較日不一定是前一交易日。股數變化包含申購買回、股票分割與公司行動，不等於經理人主動買賣。權重變化也受股價影響。資料每個交易日由排程自動更新。</p></details></div>`;
   o+=`<details class="method"><summary>計算方法與資料說明</summary>
-   <p>支撐壓力：取近 120 個交易日：① 波段高低點（某日最高/最低為前後各 3 日的極值）；② 經典樞紐點 P=(H+L+C)/3、S1=2P−H、S2=P−(H−L)、R1=2P−L、R2=P+(H−L)；③ MA20、MA60。候選價位與該帶起點差距 1.5% 內者合併為一個「價格帶」（低–高）。低於收盤的最近兩帶為第一、第二支撐，高於收盤者為壓力。缺少結構時不補猜測值。</p>
-   <p>量比＝最新日成交量 ÷ 前 20 日均量。均線與走勢以歷史資料最後一日為準。未還原價格受除權息、分割影響，相關價位需另行判讀。</p>
+   <p>支撐壓力不是目標價、不是買賣建議，也不代表適合追價。價位全部來自真實歷史成交結構：近 120 個交易日的波段高低點（前後各 2 日確認）與量能K（成交量 ≥ 前 20 日均量 1.5 倍）的最高、最低價；高點被突破超過 1% 後不再當壓力；支撐被跌破時結構轉弱。相鄰結構落在同一波動容差（1.6%）內合併為同一價格帶，不硬拆兩區；價位皆依台股升降單位取整。支撐：現價下方 0～10% 標示近端、10～20% 標示中期、超過 20% 列為長期結構。支撐候選包含波段低點、缺口邊緣、MA5／MA20、近 20 日高低點與量能K。壓力：第一壓力帶之上的下一個獨立結構，若已超過 +10% 則保留、改標中期壓力。近 10 日高點落在第一壓力帶時，標為「關鍵突破／壓力共振區」。找不到真實結構就顯示「尚未形成」，不以公式補值；「資料不足」表示來源資料不足以計算。創新高時顯示明日漲停參考價（依漲跌幅限制，非結構價位）。</p>
+   <p>量比＝最新日成交量 ÷ 近 20 日均量（含當日）。均線與走勢以歷史資料最後一日為準。未還原價格受除權息、分割影響，相關價位需另行判讀。</p>
    <p>資料來源：臺灣證券交易所 OpenAPI／網站資料（STOCK_DAY_ALL、STOCK_DAY、T86、MI_MARGN、t187ap03_L）與櫃買中心 OpenAPI／網站資料（每日收盤行情、個股日成交、三大法人、融資融券餘額、mopsfin_t187ap03_O）；ETF 持股取自元大投信、群益投信官網公開持股。法人單位為千股換算張，日期獨立標示。每個交易日 15:00（台北）自動更新。</p>
    <p>技術價位是研究參考，不是目標價或買賣指示；不保證價格守住支撐或突破壓力。</p></details>`;
   return o;
