@@ -225,6 +225,7 @@ function spark(vals,days,fmtv,cl){const pts=vals.map((v,i)=>[i,v]).filter(p=>p[1
   const path=pts.map((q,k)=>(k?'L':'M')+X(q[0]).toFixed(1)+','+Y(q[1]).toFixed(1)).join(''),l=pts.at(-1);
   return `<svg viewBox="0 0 ${w} ${h}" class="spark" preserveAspectRatio="none"><path d="${path}L${X(l[0])},${h-p}L${X(pts[0][0])},${h-p}Z" fill="${cl}" opacity=".12"/><path d="${path}" fill="none" stroke="${cl}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>${pts.map(q=>`<circle cx="${X(q[0]).toFixed(1)}" cy="${Y(q[1]).toFixed(1)}" r="${q===l?3:1.6}" fill="${cl}"><title>${dfmt(days[q[0]])}　${fmtv(q[1])}</title></circle>`).join('')}</svg>
   <div class="sp-r"><small>${dfmt(days[pts[0][0]])}</small><small>低 ${fmtv(mn)} · 高 ${fmtv(mx)}</small><small>${dfmt(days[l[0]])}</small></div>`;}
+const hl=(v,d)=>{const a=v.filter(x=>x!=null);return a.length?[fmt(Math.min(...a),d),fmt(Math.max(...a),d)]:['—','—'];};
 function creditCard(s){
   const days=CR&&CR.days,rows=CR&&CR.data[s.code];
   if(!CR)return `<div class="rcard"><div class="rc-head"><h3>信用交易 · 融資・融券・借券賣出</h3><span>載入失敗</span></div><p class="rc-note">信用交易資料暫時無法取得。</p></div>`;
@@ -241,8 +242,7 @@ function creditCard(s){
    <div class="m4">${t('融資餘額',fmt(bal,0)+' <em>張</em>')}${t('單日增減',sgn(d1),cls(d1))}${t('5 日增減',sgn(d5),cls(d5),d5!=null&&bk(5,0)?(d5>0?'+':'')+fmt(d5/bk(5,0)*100,1)+'%':'')}${t('20 日增減',sgn(d20),cls(d20),d20!=null&&bk(20,0)?(d20>0?'+':'')+fmt(d20/bk(20,0)*100,1)+'%':'')}</div>
    <div class="m4">${t('融資使用率',use==null?'—':fmt(use,2)+'%',use>=50?'up':'',r[2]?'限額 '+fmt(r[2],0)+' 張':'')}${t('融券餘額',fmt(sh,0)+' <em>張</em>',null,'單日 '+sgn(s1)+' · 5 日 '+sgn(s5))}${t('券資比',bal?fmt(sh/bal*100,2)+'%':'—',null,'融券 ÷ 融資')}${t('借券賣出餘額',sbl==null?'—':fmt(sbl,0)+' <em>張</em>',null,sbl==null?'':'單日 '+sgn(b1)+' · 5 日 '+sgn(b5))}</div>
    <div class="m4">${t('融資維持率','官方未提供',null,'證交所／櫃買中心不公布個股維持率')}</div>
-   <div class="sparks"><div><h5>融資餘額（張）</h5>${spark(rows.map(x=>x&&x[0]),days,v=>fmt(v,0),'#d4483b')}</div><div><h5>融資使用率（%）</h5>${spark(useS,days,v=>fmt(v,2)+'%','#4871db')}</div>
-    <div><h5>融券餘額（張）</h5>${spark(rows.map(x=>x&&x[3]),days,v=>fmt(v,0),'#2c9a6f')}</div><div><h5>借券賣出餘額（張）</h5>${spark(rows.map(x=>x&&x[5]),days,v=>fmt(v,0),'#8b5cf6')}</div></div>
+   <div class="credhl"><div><b>融資餘額</b>近 ${days.length} 日 高 ${hl(rows.map(x=>x&&x[0]),0)[1]} ／ 低 ${hl(rows.map(x=>x&&x[0]),0)[0]} 張</div><div><b>融資使用率</b>高 ${hl(useS,2)[1]}% ／ 低 ${hl(useS,2)[0]}%</div><div><b>融券餘額</b>高 ${hl(rows.map(x=>x&&x[3]),0)[1]} ／ 低 ${hl(rows.map(x=>x&&x[3]),0)[0]} 張</div><div><b>借券賣出餘額</b>高 ${hl(rows.map(x=>x&&x[5]),0)[1]} ／ 低 ${hl(rows.map(x=>x&&x[5]),0)[0]} 張</div></div>
    <details class="covd"><summary>查看 ${rows.filter(x=>x&&x[0]!=null).length} 日逐日明細與來源</summary><div class="etfwrap"><table class="etft"><tr><th>日期</th><th>融資餘額</th><th>增減</th><th>使用率</th><th>融券餘額</th><th>增減</th><th>借券賣出</th><th>增減</th></tr>${detail}</table></div>
    <p class="rc-note">來源：<a href="${src[0]}" target="_blank" rel="noreferrer">${src[1]} ↗</a>、<a href="${src[2]}" target="_blank" rel="noreferrer">${src[3]} ↗</a>。單位：張（借券賣出由股換算）；使用率＝融資餘額 ÷ 融資限額；缺資料的日期留空，不當作零。</p></details>
    <p class="rc-note">融資使用率高、融券與借券賣出餘額大，只代表籌碼結構，不是買賣訊號。融資維持率為券商端資料，官方沒有公布，因此不顯示估算值。</p></div>`;
@@ -843,10 +843,12 @@ function tdccCard(s){if(!TD)return '';const r=TD.items[s.code];if(!r)return s.et
   ${pn?'':`<p class="rc-note">週變化：累積中。官方開放資料只提供最新一週，本站從 ${dfmt(TD.weeks[0])} 起每週存檔（目前 ${TD.weeks.length} 週），下週起顯示增減。</p>`}
   <details><summary>15 級持股分級明細</summary><table class="tdt"><tr><th>持股（股）</th><th>人數</th><th>占集保庫存</th><th></th></tr>${dist.map((v,i)=>`<tr><td>${TD.levels[i]}</td><td class="num">${fmt(r[7][i],0)}</td><td class="num">${fmt(v,2)}%</td><td class="bcell"><i style="width:${mx?v/mx*100:0}%"></i></td></tr>`).join('')}</table></details>
   <p class="rc-note sep">${esc(TD.note)} 來源：${esc(TD.source)}。大戶比高低只描述股權集中程度，不代表漲跌。</p></div>`;}
-function dyCard(s){if(!DY)return '';const r=DY.items[s.code],days=DY.days;
-  if(!r)return `<div class="rcard dtc"><div class="rc-head"><h3>當沖比</h3><span>近 ${days.length} 日</span></div><p class="rc-note" style="margin:0">官方當日沖銷統計近 ${days.length} 個交易日皆未列入此股，視為沒有當沖成交（不補 0）。</p></div>`;
-  const v=r.map(x=>x==null?0:x),last=v.at(-1),a5=v.slice(-5).reduce((a,b)=>a+b,0)/Math.min(5,v.length),a20=v.reduce((a,b)=>a+b,0)/v.length,mxI=v.indexOf(Math.max(...v));
-  return `<div class="rcard dtc"><div class="rc-head"><h3>當沖比</h3><span>${dfmt(days[0])}–${dfmt(days.at(-1))} · 證交所 TWTB4U／櫃買中心</span></div>
-  <div class="m4 m3"><div><small>最新（${dmd(days.at(-1))}）</small><b>${r.at(-1)==null?'—':fmt(last,1)+'<em>%</em>'}</b><small>當沖股數 ÷ 總成交股數</small></div><div><small>近 5 日平均</small><b>${fmt(a5,1)}<em>%</em></b><small>未列入日視為 0</small></div><div><small>近 ${days.length} 日平均</small><b>${fmt(a20,1)}<em>%</em></b><small>最高 ${fmt(v[mxI],1)}%（${dmd(days[mxI])}）</small></div></div>
-  <div class="sparks"><div><h5>當沖比走勢（%）</h5>${spark(v,days,x=>fmt(x,1)+'%','#c26a1c')}</div></div>
-  <p class="rc-note sep">${esc(DY.note)} 當沖比高代表短線換手快、波動可能放大，是資料特徵，不是買賣建議。</p></div>`;}
+function dyCard(s){if(!DY)return '';const r=DY.items[s.code],days=DY.days,T='個股當沖比';
+  if(!r)return `<div class="rcard dtc"><div class="rc-head"><h3>${T}</h3><span>近 ${days.length} 日</span></div><p class="rc-note" style="margin:0">官方當日沖銷統計近 ${days.length} 個交易日都沒有列入此股，視為沒有當沖成交。</p></div>`;
+  const v=r.map(x=>x==null?0:x),last=v.at(-1),a5=v.slice(-5).reduce((a,b)=>a+b,0)/Math.min(5,v.length),a20=v.reduce((a,b)=>a+b,0)/v.length,mxI=v.indexOf(Math.max(...v)),df=last-a20;
+  const jd=r.at(-1)==null?'最新一日官方沒有列入此股的當沖成交，視為沒有當沖。':df>=2?`最新 ${fmt(last,1)}%，<b class="up">高於</b>近 ${days.length} 日平均 ${fmt(df,1)} 個百分點，短線偏熱。`:df<=-2?`最新 ${fmt(last,1)}%，<b class="down">低於</b>近 ${days.length} 日平均 ${fmt(-df,1)} 個百分點，偏平穩。`:`最新 ${fmt(last,1)}%，和近 ${days.length} 日平均（${fmt(a20,1)}%）差不多，沒有明顯變熱或變冷。`;
+  return `<div class="rcard dtc"><div class="rc-head"><h3>${T}</h3><span>${s.name} 自己的數字，不是全市場 · ${dfmt(days[0])}–${dfmt(days.at(-1))}</span></div>
+  <div class="m4 m3"><div><small>最新（${dmd(days.at(-1))}）</small><b>${r.at(-1)==null?'—':fmt(last,1)+'<em>%</em>'}</b><small>當天當沖占成交量</small></div><div><small>近 5 日平均</small><b>${fmt(a5,1)}<em>%</em></b></div><div><small>近 ${days.length} 日平均</small><b>${fmt(a20,1)}<em>%</em></b><small>最高 ${fmt(v[mxI],1)}%（${dmd(days[mxI])}）</small></div></div>
+  <div class="dyread"><b>白話看法</b><p>當沖比＝這檔股票當天成交的股數裡，有多少比例是當沖（同一天買進又賣出）。拿它跟自己近 ${days.length} 日平均比：高於平均，代表短線換手熱、波動可能放大；低於平均，代表較平穩。</p><p class="dyj">${jd}<small>（高低以 ±2 個百分點為界；僅描述資料，不是買賣建議。）</small></p></div>
+  <div class="sparks"><div><h5>${s.name} 當沖比走勢（%）</h5>${spark(v,days,x=>fmt(x,1)+'%','#c26a1c')}</div></div>
+  <p class="rc-note sep">資料：證交所 TWTB4U、櫃買中心當沖統計（個股當沖成交股數 ÷ 當日總成交股數）；官方沒列入的日子視為 0。</p></div>`;}
