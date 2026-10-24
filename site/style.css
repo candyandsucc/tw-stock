@@ -350,3 +350,4 @@ table.fillt td,table.fillt th,table.tdt td,table.tdt th{padding:6px 8px;font-siz
 .credhl{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin:12px 0 4px;font-size:12px;color:#46546f}.credhl b{display:block;font-size:11px;color:#7f8ba0;font-weight:500}
 .dyread{background:#f6f8fd;border-radius:8px;padding:10px 12px;margin-top:6px;font-size:12px;line-height:1.7;color:#46546f}.dyread b:first-child{color:#1b2a4a}.dyread p{margin:4px 0}.dyj{color:#1b2a4a}.dyj small{display:block;color:#8a95a7;font-size:11px}
 html.m .credhl{grid-template-columns:1fr}
+.dtc .dyj{font-size:14px;line-height:1.7;color:#1b2a4a;margin:10px 0 2px}

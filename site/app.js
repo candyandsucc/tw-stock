@@ -382,6 +382,7 @@ function rrHtml(H,L,close){
 function bindRR(){const b=$('#rrbox');if(!b||!window._H)return;b.querySelectorAll('button[data-rr]').forEach(x=>x.onclick=()=>{const k=x.dataset.rr;RRS[k]=k==='stop'&&x.dataset.v!=='ma20'?+x.dataset.v:x.dataset.v;const s=selS();b.innerHTML=rrHtml(window._H,window._H.levels,s.close);bindRR();});}
 function confluence(H,L){const r1=L.resistance[0];if(!r1)return false;const hi=Math.max(...H.rows.slice(-10,-1).map(r=>r[2]));return Math.abs(hi/r1.price-1)<=0.01||(hi>=r1.low&&hi<=r1.high);}
 async function pick(code){
+  if(code!==sel)etfOpen=false;
   sel=code;location.hash=code;render();const s=ALL.find(x=>x.code===code);if(!s)return;
   let H=null;if(s.hasHistory){try{H=await fetch(`data/history/${code}.json`).then(r=>r.ok?r.json():null)}catch(e){}}window._H=H;
   const src=`<b>${s.src}</b>`;const inst=s.market==='上市'?(INST.data[code]||[]):null;
@@ -465,7 +466,7 @@ function research(s,H,C,E){
 }
 
 /* ===== ETF：個股頁「持有此股票的 ETF」與 ETF 頁「持股明細」（投信官網公開持股／PCF，比較前一個揭露日） ===== */
-let ETFSET=new Set(),etfSort={k:'w',d:-1},etfAct=false,etfPS={k:'w',d:-1},etfPTab='全部';
+let ETFSET=new Set(),etfSort={k:'w',d:-1},etfAct=false,etfOpen=false,etfPS={k:'w',d:-1},etfPTab='全部';
 const fundOf=(E,c)=>E.funds.find(f=>f.code===c&&f.date);
 const loadEF=()=>EF||(EF=fetch('data/etf.json').then(r=>r.json()));
 const aumFmt=v=>v==null?'—':v>=1e8?fmt(v/1e8,v>=1e10?0:1)+' 億':fmt(v/1e4,0)+' 萬';
@@ -488,11 +489,11 @@ function etfHolders(s,E,C){
    ${etfAggLine(s,E,C)}
    <p class="rc-note">已接入 ${new Set(F.filter(f=>f.date).map(f=>f.issuer)).size} 家投信、${F.filter(f=>f.date).length} 檔 ETF 的官方持股，比對前一個揭露日的股數增減（漲紅跌綠）。${held.length?`本股在這些 ETF 的估算持有金額合計約 ${aumFmt(total)}${noAum?`（另有 ${noAum} 檔缺規模未計入）`:''}。`:''}沒接入的 ETF 無法判定，不代表沒持有。</p>
    <div class="tabs">${['全部','增加','減少'].map(t=>`<button data-t="${t}" class="${t===etfTab?'on':''}">${t}</button>`).join('')}<button id="etfAct" class="${etfAct?'on':''}" aria-pressed="${etfAct}">只看主動式 ETF</button><span>顯示 ${R.length} / ${all.length} 筆</span></div>
-   ${R.length?`<div class="etfwrap"><table class="etft"><tr><th>ETF / 投信 / 基準日</th>${sortTh('權重','w',etfSort)}${sortTh('持有張數','s',etfSort)}${sortTh('估算金額','a',etfSort)}${sortTh('增減張數 / 增減幅','d',etfSort)}</tr>${R.map(r=>`<tr><td><a href="#${r.fund}" class="etflink" data-go="${r.fund}">${r.fund} ${r.f.name}</a>${r.f.active?'<span class="act">主動式</span>':''}<small>${r.f.issuer} · 基準日 ${r.f.date}${r.f.prevDate?' · 比較 '+r.f.prevDate:''}${r.f.stale?' · <b class="warn">沿用舊資料</b>':''} · <a href="${r.f.url}" target="_blank" rel="noreferrer">官網 ↗</a></small></td>
+   ${R.length?`<details id="etfList" class="etfdet" ${etfOpen?'open':''}><summary>展開 ETF 名單（${R.length} 檔）</summary><div class="etfwrap"><table class="etft"><tr><th>ETF / 投信 / 基準日</th>${sortTh('權重','w',etfSort)}${sortTh('持有張數','s',etfSort)}${sortTh('估算金額','a',etfSort)}${sortTh('增減張數 / 增減幅','d',etfSort)}</tr>${R.map(r=>`<tr><td><a href="#${r.fund}" class="etflink" data-go="${r.fund}">${r.fund} ${r.f.name}</a>${r.f.active?'<span class="act">主動式</span>':''}<small>${r.f.issuer} · 基準日 ${r.f.date}${r.f.prevDate?' · 比較 '+r.f.prevDate:''}${r.f.stale?' · <b class="warn">沿用舊資料</b>':''} · <a href="${r.f.url}" target="_blank" rel="noreferrer">官網 ↗</a></small></td>
    <td>${fmt(r.weight)}%<small>${r.prevWeight==null?'—':'前期 '+fmt(r.prevWeight)+'%（'+sg(r.weight-r.prevWeight)+fmt(r.weight-r.prevWeight)+'）'}</small></td>
    <td>${lotF(r.shares)}<small>${r.shares?fmt(r.shares,0)+' 股':'已剔除'}</small></td>
    <td>${r.amt==null?'—':aumFmt(r.amt)}<small>${r.f.aum?'ETF 規模 '+aumFmt(r.f.aum):'未取得規模'}</small></td>
-   <td class="${cls(r.d)}">${dCell(r.shares,r.prevShares)}</td></tr>`).join('')}</table></div>`
+   <td class="${cls(r.d)}">${dCell(r.shares,r.prevShares)}</td></tr>`).join('')}</table></div></details>`
    :`<p class="rc-note">${all.length?'目前沒有符合此篩選的紀錄。':'在已成功取得的 ETF 名單中未找到本股；未接入或失敗的 ETF 無法判定。'}</p>`}
    <p class="rc-note">估算金額＝該 ETF 淨資產（投信官網公開，與持股同基準日）× 權重，是估算值，不是實際買進金額；抓不到規模的留空，不估造。股數增減含申購買回、股票分割與公司行動，不等於經理人主動買賣。預設按權重由高到低，可點欄位標題切換排序。</p></div>`;
 }
@@ -535,8 +536,9 @@ function bindResearch(){
   bindChart();
   const E_=()=>EF,rr=()=>EF.then(E=>{const s=selS();if(!s)return;fillResearch(s,window._H,CH_,E);bindResearch();}),
     rp=()=>EF.then(E=>{const s=selS();const p=$('#etfpage');if(s&&p){p.innerHTML=etfPage(s,E);bindResearch();}});
-  document.querySelectorAll('#sl-etf .tabs button[data-t]').forEach(b=>b.onclick=()=>{etfTab=b.dataset.t;rr();});
-  const ab=$('#etfAct');if(ab)ab.onclick=()=>{etfAct=!etfAct;rr();};
+  document.querySelectorAll('#sl-etf .tabs button[data-t]').forEach(b=>b.onclick=()=>{etfTab=b.dataset.t;etfOpen=true;rr();});
+  const ab=$('#etfAct');if(ab)ab.onclick=()=>{etfAct=!etfAct;etfOpen=true;rr();};
+  const el=$('#etfList');if(el)el.addEventListener('toggle',()=>{etfOpen=el.open;});
   document.querySelectorAll('#sl-etf th.sk').forEach(h=>{const f=()=>{skToggle(etfSort,h.dataset.sk);rr();};h.onclick=f;h.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();f();}};});
   document.querySelectorAll('#etfpage .tabs button[data-pt]').forEach(b=>b.onclick=()=>{etfPTab=b.dataset.pt;rp();});
   document.querySelectorAll('#etfpage th.sk').forEach(h=>{const f=()=>{skToggle(etfPS,h.dataset.sk);rp();};h.onclick=f;h.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();f();}};});
@@ -845,10 +847,10 @@ function tdccCard(s){if(!TD)return '';const r=TD.items[s.code];if(!r)return s.et
   <p class="rc-note sep">${esc(TD.note)} 來源：${esc(TD.source)}。大戶比高低只描述股權集中程度，不代表漲跌。</p></div>`;}
 function dyCard(s){if(!DY)return '';const r=DY.items[s.code],days=DY.days,T='個股當沖比';
   if(!r)return `<div class="rcard dtc"><div class="rc-head"><h3>${T}</h3><span>近 ${days.length} 日</span></div><p class="rc-note" style="margin:0">官方當日沖銷統計近 ${days.length} 個交易日都沒有列入此股，視為沒有當沖成交。</p></div>`;
-  const v=r.map(x=>x==null?0:x),last=v.at(-1),a5=v.slice(-5).reduce((a,b)=>a+b,0)/Math.min(5,v.length),a20=v.reduce((a,b)=>a+b,0)/v.length,mxI=v.indexOf(Math.max(...v)),df=last-a20;
-  const jd=r.at(-1)==null?'最新一日官方沒有列入此股的當沖成交，視為沒有當沖。':df>=2?`最新 ${fmt(last,1)}%，<b class="up">高於</b>近 ${days.length} 日平均 ${fmt(df,1)} 個百分點，短線偏熱。`:df<=-2?`最新 ${fmt(last,1)}%，<b class="down">低於</b>近 ${days.length} 日平均 ${fmt(-df,1)} 個百分點，偏平穩。`:`最新 ${fmt(last,1)}%，和近 ${days.length} 日平均（${fmt(a20,1)}%）差不多，沒有明顯變熱或變冷。`;
+  const v=r.map(x=>x==null?0:x),last=v.at(-1),a5=v.slice(-5).reduce((a,b)=>a+b,0)/Math.min(5,v.length),a20=v.reduce((a,b)=>a+b,0)/v.length,mxI=v.indexOf(Math.max(...v)),df=last-a20,N=days.length;
+  const jd=r.at(-1)==null?`${s.name}最新一日官方沒有列入當沖成交，視為沒有當沖；近 ${N} 日平均 ${fmt(a20,1)}%。`:df>=2?`${s.name}當沖比 ${fmt(last,1)}%，<b class="up">高於</b>近 ${N} 日平均 ${fmt(a20,1)}% 達 ${fmt(df,1)} 個百分點，短線換手偏熱。`:df<=-2?`${s.name}當沖比 ${fmt(last,1)}%，<b class="down">低於</b>近 ${N} 日平均 ${fmt(a20,1)}% 達 ${fmt(-df,1)} 個百分點，偏平穩。`:`${s.name}當沖比 ${fmt(last,1)}%，和近 ${N} 日平均 ${fmt(a20,1)}% 差不多，短線換手沒有明顯變熱。`;
   return `<div class="rcard dtc"><div class="rc-head"><h3>${T}</h3><span>${s.name} 自己的數字，不是全市場 · ${dfmt(days[0])}–${dfmt(days.at(-1))}</span></div>
-  <div class="m4 m3"><div><small>最新（${dmd(days.at(-1))}）</small><b>${r.at(-1)==null?'—':fmt(last,1)+'<em>%</em>'}</b><small>當天當沖占成交量</small></div><div><small>近 5 日平均</small><b>${fmt(a5,1)}<em>%</em></b></div><div><small>近 ${days.length} 日平均</small><b>${fmt(a20,1)}<em>%</em></b><small>最高 ${fmt(v[mxI],1)}%（${dmd(days[mxI])}）</small></div></div>
-  <div class="dyread"><b>白話看法</b><p>當沖比＝這檔股票當天成交的股數裡，有多少比例是當沖（同一天買進又賣出）。拿它跟自己近 ${days.length} 日平均比：高於平均，代表短線換手熱、波動可能放大；低於平均，代表較平穩。</p><p class="dyj">${jd}<small>（高低以 ±2 個百分點為界；僅描述資料，不是買賣建議。）</small></p></div>
+  <p class="dyj">${jd}</p>
+  <div class="m4 m3"><div><small>最新（${dmd(days.at(-1))}）</small><b>${r.at(-1)==null?'—':fmt(last,1)+'<em>%</em>'}</b><small>當天當沖占成交量</small></div><div><small>近 5 日平均</small><b>${fmt(a5,1)}<em>%</em></b></div><div><small>近 ${N} 日平均</small><b>${fmt(a20,1)}<em>%</em></b><small>最高 ${fmt(v[mxI],1)}%（${dmd(days[mxI])}）</small></div></div>
   <div class="sparks"><div><h5>${s.name} 當沖比走勢（%）</h5>${spark(v,days,x=>fmt(x,1)+'%','#c26a1c')}</div></div>
-  <p class="rc-note sep">資料：證交所 TWTB4U、櫃買中心當沖統計（個股當沖成交股數 ÷ 當日總成交股數）；官方沒列入的日子視為 0。</p></div>`;}
+  <p class="rc-note sep">證交所 TWTB4U、櫃買中心；±2 個百分點為界，非買賣建議。</p></div>`;}
