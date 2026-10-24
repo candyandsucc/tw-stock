@@ -147,6 +147,85 @@ def fubon(stk, date=None):
     am = re.search(r"基金淨資產\(新台幣\)</p>\s*<p>([\d,]+)</p>", t)
     return dict(date=d, aum=n(am.group(1)) if am else None, holdings=hs)
 
+def kgi(fid, date=None):
+    t = H.unescape(curl(f"https://www.kgifund.com.tw/Fund/Detail?fundID={fid}", binary=True).decode("utf-8", "ignore"))
+    m = re.search(r"持股比重\s*(?:<[^>]*>\s*)*\((\d{4}/\d{2}/\d{2})\)", t)
+    if not m: raise EtfError("凱基頁面改版：找不到持股基準日（可能需登入或已改版）")
+    d = ndate(m.group(1))
+    hs = [hold(r.group(1), r.group(2), n(r.group(3)), n(r.group(4))) for r in re.finditer(r'<td[^>]*>\s*(\d{4})\s*</td>\s*<td[^>]*>\s*([^<]*?)\s*</td>\s*<td[^>]*>\s*([\d,]+)\s*</td>\s*<td[^>]*>\s*([\d.]+)\s*</td>', t)]
+    seen = set(); hs = [h for h in hs if not (h["code"] in seen or seen.add(h["code"]))]  # 頁面含電腦版與手機版兩份表格，去重
+    if not hs: raise EtfError("凱基頁面無持股列")
+    am = re.search(r"基金淨值資產價值\s*(?:<[^>]*>\s*)*TWD\$\s*([\d,]+)", t)
+    return dict(date=d, aum=n(am.group(1)) if am else None, holdings=hs)
+
+def next_wd(d):
+    x = dt.date.fromisoformat(d) + dt.timedelta(days=1)
+    while x.weekday() >= 5: x += dt.timedelta(days=1)
+    return x.isoformat()
+
+def sinopac(fund, base):
+    """永豐 PCF（現金申購買回清單）：以申購日 hDate 查詢，頁面「資料日期」為持股基準日（前一營業日）。"""
+    b = curl("https://sitc.sinopac.com/SinopacEtfs/Etfs/Pcf", data=f"fundId={fund}&hDate={next_wd(base)}&op=", binary=True).decode("utf-8", "ignore")
+    m = re.search(r"資料日期：(\d{4}/\d{2}/\d{2})", b)
+    if not m or ndate(m.group(1)) != base:  # 申購日剛好遇休市日時，改用預設（最新）頁面
+        b2 = curl("https://sitc.sinopac.com/SinopacEtfs/Etfs/Pcf", data=f"fundId={fund}&op=", binary=True).decode("utf-8", "ignore")
+        m2 = re.search(r"資料日期：(\d{4}/\d{2}/\d{2})", b2)
+        if m2 and ndate(m2.group(1)) == base: b, m = b2, m2
+    if not m: raise EtfError("永豐頁面改版：找不到資料日期")
+    d = ndate(m.group(1))
+    if d != base: raise EtfError(f"永豐資料日 {d} 與要求 {base} 不符")
+    hs = [hold(r.group(1), r.group(2), n(r.group(3)), n(r.group(4))) for r in re.finditer(r"<td>(\d{4})</td>\s*<td>([^<]*)</td>\s*<td>([\d,]+)</td>\s*<td>([\d.]+)</td>", b)]
+    if not hs: raise EtfError("永豐頁面無持股列")
+    am = re.search(r"基金淨資產價值\(元\)</t[dh]>\s*<t[dh]>NT\$&nbsp;([\d,]+)", b)
+    return dict(date=d, aum=n(am.group(1)) if am else None, holdings=hs)
+
+def mega(fid, base):
+    """兆豐 PCF：ASP.NET 表單查詢；公告日（qdt）頁面列示的是前一營業日持股，基準日取頁面「每基數申購總價金差異額」前的日期。"""
+    from urllib.parse import urlencode
+    U = "https://www.megafunds.com.tw/MEGA/etf/trade_pcf.aspx"
+    def query(qdt):
+        jar = tempfile.mktemp()
+        try:
+            t0 = curl(U, jar=jar, binary=True).decode("utf-8", "ignore")
+            f = {k: (re.search(r'name="%s"[^>]*value="([^"]*)"' % k, t0) or [0, ""])[1] for k in ("__VIEWSTATE", "__VIEWSTATEGENERATOR", "__VIEWSTATEENCRYPTED")}
+            f.update({"ctl00$ContentPlaceHolder1$category_id": "", "ctl00$ContentPlaceHolder1$fund_id": str(fid)})
+            if qdt: f.update({"ctl00$ContentPlaceHolder1$qdt": qdt, "ctl00$ContentPlaceHolder1$button2": "查 詢"})
+            else: f["ctl00$ContentPlaceHolder1$button1"] = "查 詢"
+            return curl(U, data=urlencode(f), jar=jar, binary=True).decode("utf-8", "ignore")
+        finally:
+            if os.path.exists(jar): os.unlink(jar)
+    pat = r'ann-title">\s*(\d{4}/\d{2}/\d{2})\s*每基數申購總價金差異額'
+    t = query(next_wd(base).replace("-", "/")); m = re.search(pat, t)
+    if not m or ndate(m.group(1)) != base:  # 申購日遇休市日時，改用預設（最新）頁面
+        t2 = query(None); m2 = re.search(pat, t2)
+        if m2 and ndate(m2.group(1)) == base: t, m = t2, m2
+    if not m: raise EtfError("兆豐頁面改版：找不到基準日")
+    d = ndate(m.group(1))
+    if d != base: raise EtfError(f"兆豐資料日 {d} 與要求 {base} 不符")
+    hs = [hold(r.group(1), r.group(2).strip(), n(r.group(3)), n(r.group(4))) for r in re.finditer(r'<td class="td-stock set-size-25">(\d{4})</td>\s*<td[^>]*>([^<]*)</td>\s*<td[^>]*>([\d,]+)</td>\s*<td[^>]*>([\d.]+)%</td>', t)]
+    if not hs: raise EtfError("兆豐頁面無持股列")
+    am = re.search(r"基金淨資產價值\(元\)</div>\s*<div class=\"ann-content\">TWD\$\s*([\d,]+)", t)
+    return dict(date=d, aum=n(am.group(1)) if am else None, holdings=hs)
+
+def taishin(fund, base):
+    """台新 PCF：POST 查詢公告日 PUB_DATE；頁面持股為前一營業日（取「每基數實際申購總價金」前的日期為基準日）。"""
+    U = "https://www.tsit.com.tw/ETF/Home/Pcf"
+    def q(pub): return curl(U, data=f"ETF_ID={fund}&DATA_DATE={pub}&PUB_DATE={pub}&FUND_TYPE=ALL&MAX_DATE=2026-12-31", binary=True).decode("utf-8", "ignore")
+    pat = r"(\d{4}/\d{2}/\d{2})每基數實際申購總價金"
+    t = q(next_wd(base)); m = re.search(pat, t)
+    if not m or ndate(m.group(1)) != base:  # 公告日遇休市日：改用頁面提供的最新公告日
+        mx = re.search(r'id="MAX_DATE"[^>]*value="([^"]*)"', curl(U, binary=True).decode("utf-8", "ignore"))
+        if mx:
+            t2 = q(mx.group(1)); m2 = re.search(pat, t2)
+            if m2 and ndate(m2.group(1)) == base: t, m = t2, m2
+    if not m: raise EtfError("台新頁面改版：找不到基準日")
+    d = ndate(m.group(1))
+    if d != base: raise EtfError(f"台新資料日 {d} 與要求 {base} 不符")
+    hs = [hold(r.group(1), r.group(2), n(r.group(3)), n(r.group(4))) for r in re.finditer(r"<td>(\d{4}) TT</td>\s*<td>([^<]*)</td>\s*<td>([\d,]+)</td>\s*<td>([\d.]+)%</td>", t)]
+    if not hs: raise EtfError("台新頁面無台股持股列")
+    am = re.search(r"基金淨資產價值\(元\)</th>\s*<td>TWD ([\d,]+)", t)
+    return dict(date=d, aum=n(am.group(1)) if am else None, holdings=hs)
+
 CATH = "https://cwapi.cathaysite.com.tw/api/ETF/DownloadETFWeightExcel?FundCode={f}&SearchDate={d}"
 def cathay(fund, date):
     b = curl(CATH.format(f=fund, d=date.replace("-", "/")), binary=True, tries=2)
@@ -169,6 +248,11 @@ FUNDS = [
     ("00940", "元大台灣價值高息", "元大投信", "https://www.yuantaetfs.com/product/detail/00940/ratio", yuanta, "00940", False),
     ("00919", "群益台灣精選高息", "群益投信", "https://www.capitalfund.com.tw/etf/product/detail/195/portfolio", capital, "195", True),
     ("00982A", "主動群益台灣強棒", "群益投信", "https://www.capitalfund.com.tw/etf/product/detail/399/portfolio", capital, "399", True),
+    ("00415A", "主動群益核心50", "群益投信", "https://www.capitalfund.com.tw/etf/product/detail/504/portfolio", capital, "504", True),
+    ("00992A", "主動群益科技創新", "群益投信", "https://www.capitalfund.com.tw/etf/product/detail/500/portfolio", capital, "500", True),
+    ("00923", "群益台ESG低碳50", "群益投信", "https://www.capitalfund.com.tw/etf/product/detail/365/portfolio", capital, "365", True),
+    ("00946", "群益科技高息成長", "群益投信", "https://www.capitalfund.com.tw/etf/product/detail/388/portfolio", capital, "388", True),
+    ("00927", "群益半導體收益", "群益投信", "https://www.capitalfund.com.tw/etf/product/detail/366/portfolio", capital, "366", True),
     ("00929", "復華台灣科技優息", "復華投信", "https://www.fhtrust.com.tw/ETF/etf_detail/ETF21", fuhhwa, "ETF21", True),
     ("00991A", "主動復華台灣未來50", "復華投信", "https://www.fhtrust.com.tw/ETF/etf_detail/ETF23", fuhhwa, "ETF23", True),
     ("00731", "復華富時台灣高股息低波動", "復華投信", "https://www.fhtrust.com.tw/ETF/etf_detail/ETF08", fuhhwa, "ETF08", True),
@@ -181,11 +265,37 @@ FUNDS = [
     ("006208", "富邦台50", "富邦投信", "https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId=006208", fubon, "006208", True),
     ("00900", "富邦特選高股息30", "富邦投信", "https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId=00900", fubon, "00900", True),
     ("00692", "富邦公司治理", "富邦投信", "https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId=00692", fubon, "00692", True),
+    ("00915", "凱基優選高股息30", "凱基投信", "https://www.kgifund.com.tw/Fund/Detail?fundID=J015", kgi, "J015", False),
+    ("00938", "凱基優選30", "凱基投信", "https://www.kgifund.com.tw/Fund/Detail?fundID=J017", kgi, "J017", False),
+    ("00952", "凱基台灣AI50", "凱基投信", "https://www.kgifund.com.tw/Fund/Detail?fundID=J020", kgi, "J020", False),
+    ("009816", "凱基台灣TOP50", "凱基投信", "https://www.kgifund.com.tw/Fund/Detail?fundID=J023", kgi, "J023", False),
+    ("00407A", "主動凱基台灣", "凱基投信", "https://www.kgifund.com.tw/Fund/Detail?fundID=J024", kgi, "J024", False),
+    ("00907", "永豐優息存股", "永豐投信", "https://sitc.sinopac.com/SinopacEtfs/Etfs/Pcf", sinopac, "00907", True),
+    ("00930", "永豐ESG低碳高息", "永豐投信", "https://sitc.sinopac.com/SinopacEtfs/Etfs/Pcf", sinopac, "00930", True),
+    ("00901", "永豐智能車供應鏈", "永豐投信", "https://sitc.sinopac.com/SinopacEtfs/Etfs/Pcf", sinopac, "00901", True),
+    ("00888", "永豐台灣ESG", "永豐投信", "https://sitc.sinopac.com/SinopacEtfs/Etfs/Pcf", sinopac, "00888", True),
+    ("006204", "永豐臺灣加權", "永豐投信", "https://sitc.sinopac.com/SinopacEtfs/Etfs/Pcf", sinopac, "006204", True),
+    ("00410A", "主動永豐科技趨勢", "永豐投信", "https://sitc.sinopac.com/SinopacEtfs/Etfs/Pcf", sinopac, "00410A", True),
+    ("00690", "兆豐臺灣藍籌30", "兆豐投信", "https://www.megafunds.com.tw/MEGA/etf/trade_pcf.aspx", mega, "5", True),
+    ("00913", "兆豐特選台灣晶圓製造", "兆豐投信", "https://www.megafunds.com.tw/MEGA/etf/trade_pcf.aspx", mega, "17", True),
+    ("00921", "兆豐台灣產業龍頭存股等權重", "兆豐投信", "https://www.megafunds.com.tw/MEGA/etf/trade_pcf.aspx", mega, "18", True),
+    ("00932", "兆豐台灣ESG永續高股息等權重", "兆豐投信", "https://www.megafunds.com.tw/MEGA/etf/trade_pcf.aspx", mega, "19", True),
+    ("00943", "兆豐台灣電子成長高息等權重", "兆豐投信", "https://www.megafunds.com.tw/MEGA/etf/trade_pcf.aspx", mega, "20", True),
+    ("00996A", "主動兆豐台灣豐收", "兆豐投信", "https://www.megafunds.com.tw/MEGA/etf/trade_pcf.aspx", mega, "23", True),
+    ("00904", "台新臺灣半導體30", "台新投信", "https://www.tsit.com.tw/ETF/Home/ETFSeriesDetail/00904", taishin, "00904", True),
+    ("00936", "台新永續高息中小", "台新投信", "https://www.tsit.com.tw/ETF/Home/ETFSeriesDetail/00936", taishin, "00936", True),
+    ("00947", "台新臺灣IC設計", "台新投信", "https://www.tsit.com.tw/ETF/Home/ETFSeriesDetail/00947", taishin, "00947", True),
+    ("00962", "台新AI優息動能", "台新投信", "https://www.tsit.com.tw/ETF/Home/ETFSeriesDetail/00962", taishin, "00962", True),
+    ("00987A", "主動台新優勢成長", "台新投信", "https://www.tsit.com.tw/ETF/Home/ETFSeriesDetail/00987A", taishin, "00987A", True),
+    ("0052", "富邦科技", "富邦投信", "https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId=0052", fubon, "0052", True),
+    ("0057", "富邦摩台", "富邦投信", "https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId=0057", fubon, "0057", True),
+    ("00733", "富邦臺灣中小", "富邦投信", "https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId=00733", fubon, "00733", True),
     ("00878", "國泰永續高股息", "國泰投信", "https://www.cathaysite.com.tw/ETF/detail/ECN", cathay, "CN", True),
 ]
-# 尚未納入（原因）：中信、永豐——官網為前端渲染且找不到穩定的公開下載介面；國泰官網與其 API 對自動化請求回 403（Akamai 存取拒絕），
-# 若排程環境可連線則自動取得，否則在頁面顯示失敗原因。不繞過任何存取限制。
-NOT_COVERED = "中信投信、永豐投信（官網為前端渲染且無穩定公開下載介面）；其他未列出的 ETF"
+# 尚未納入（原因）：只列已實際檢查過的；不繞過任何驗證、登入或存取限制。
+NOT_COVERED = ("國泰投信（官網與下載 API 對自動化請求回 403 存取拒絕，已列入嘗試清單，取得失敗會顯示原因）；"
+               "中信投信（持股 API 需網頁工作階段 Token，無穩定公開檔案）；第一金投信、玉山投信（未找到可穩定取得的官方持股揭露；玉山官網本次連線失敗）；"
+               "安聯、聯博、摩根、貝萊德（以海外／債券型 ETF 為主，非台股持股揭露範圍）；其他未列出的 ETF")
 
 def snaps(code): return sorted(SNAP.glob(f"{code}_*.json"), key=lambda f: f.name)
 def save(code, cur):
@@ -202,7 +312,7 @@ def fetch_one(code, fn, arg, canhist, latest):
     """回傳 (cur, prev, status, reason, stale)。"""
     cur = None; reason = None
     try:
-        if fn in (fuhhwa, nomura, cathay):  # 依日期查：自最近交易日往前找第一個有資料的日期
+        if fn in (fuhhwa, nomura, cathay, sinopac, mega, taishin):  # 依日期查：自最近交易日往前找第一個有資料的日期
             last = None
             for d in [latest] + list(prev_days(latest, 4)):
                 try: cur = fn(arg, d); break
