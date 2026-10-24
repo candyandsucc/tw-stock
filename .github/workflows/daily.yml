@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: "0 14 * * 1-5"   # 週一至週五 台北 (UTC+8) 22:00
   workflow_dispatch:
+    inputs:
+      force:
+        description: "強制更新（忽略休市日判斷）"
+        type: boolean
+        default: false
 permissions:
   contents: write
   pages: write
@@ -12,12 +17,25 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    outputs:
+      trading: ${{ steps.gate.outputs.trading }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: python scripts/fetch.py
+      - name: 休市日判斷（週末／國定假日／補假／颱風假則略過）
+        id: gate
+        run: |
+          python scripts/market_calendar.py
+          if [ "${{ inputs.force }}" = "true" ]; then echo "force=true，強制更新"; echo "trading=true" >> "$GITHUB_OUTPUT"; fi
+      - name: 休市，略過更新
+        if: steps.gate.outputs.trading != 'true'
+        env: { REASON: "${{ steps.gate.outputs.reason }}" }
+        run: echo "今日休市（$REASON），不抓資料、不 commit、不部署"
+      - if: steps.gate.outputs.trading == 'true'
+        run: python scripts/fetch.py
       - name: Commit data
+        if: steps.gate.outputs.trading == 'true'
         run: |
           git config user.name "tw-stock-bot"
           git config user.email "actions@users.noreply.github.com"
@@ -26,11 +44,14 @@ jobs:
           git commit -m "data: $(TZ=Asia/Taipei date '+%F %H:%M')"
           git pull --rebase -X theirs origin main
           git push
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - if: steps.gate.outputs.trading == 'true'
+        uses: actions/configure-pages@v5
+      - if: steps.gate.outputs.trading == 'true'
+        uses: actions/upload-pages-artifact@v3
         with: { path: site }
   deploy:
     needs: update
+    if: needs.update.outputs.trading == 'true'
     runs-on: ubuntu-latest
     environment: { name: github-pages, url: "${{ steps.d.outputs.page_url }}" }
     steps:
