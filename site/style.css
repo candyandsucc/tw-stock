@@ -261,3 +261,11 @@ html.m .ma{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px}html.m .ma .m
 .db-note{font-size:11px;color:#9a5b00}.db-src{margin-left:auto;font-size:11px;color:#98a2b3}.db-src a{color:#4871db}
 html.m .datebar{padding:8px 10px;gap:6px 12px}html.m .db-src{margin-left:0;flex-basis:100%}html.m .db-chip{flex-basis:100%;border-radius:8px}
 .listdate{font-size:11px;color:#7f8ba0;margin:2px 0 6px}.stalechip{display:inline-block;background:#fff3dc;color:#9a5b00;border-radius:999px;font-size:11px;padding:1px 8px;margin-left:6px;font-weight:600}
+
+/* 交易警示標記 */
+.fl{display:inline-block;border-radius:4px;font-size:10px;font-weight:700;padding:0 5px;margin-left:4px;line-height:16px;vertical-align:middle}
+.fl.p{background:#fde7e5;color:#b3261e}.fl.f{background:#fff0d6;color:#9a5b00}.fl.n{background:#fff8d6;color:#8a6d00}.fl.g{background:#eceff4;color:#475467}
+.flagc .flr{border-top:1px solid #edf0f6;padding:10px 0;font-size:12.5px;color:#46546f;line-height:1.7}.flagc .flr:first-of-type{border-top:0}
+.flagc .flr>b{display:inline-block;border-radius:4px;padding:0 8px;margin-right:6px;font-size:12px}.flagc .flr.p>b{background:#fde7e5;color:#b3261e}.flagc .flr.f>b{background:#fff0d6;color:#9a5b00}.flagc .flr.n>b{background:#fff8d6;color:#8a6d00}.flagc .flr.g>b{background:#eceff4;color:#475467}
+.flagc .flr>span{color:#7f8ba0;font-size:11.5px}.flagc .flr em{display:block;font-style:normal;color:#9a5b00;font-size:11.5px}.flagc .flr div div{padding:1px 0}
+.flagc.ok{background:#f7fbf8}

@@ -19,11 +19,11 @@ const setW=a=>{localStorage.setItem('tw-watch',JSON.stringify(a));render();};
 const toggle=c=>{const a=W();setW(a.includes(c)?a.filter(x=>x!==c):[...a,c]);};
 const dfmt=d=>d?d.replaceAll('-','/'):'—';
 async function init(){
-  const [s,i,sc]=await Promise.all([fetch('data/stocks.json').then(r=>r.json()),fetch('data/institutional.json').then(r=>r.json()),fetch('data/screen.json').then(r=>r.json()).catch(()=>null)]);
-  ALL=s.stocks;META=s.meta;INST=i;SC=sc;
+  const [s,i,sc,fl]=await Promise.all([fetch('data/stocks.json').then(r=>r.json()),fetch('data/institutional.json').then(r=>r.json()),fetch('data/screen.json').then(r=>r.json()).catch(()=>null),fetch('data/flags.json').then(r=>r.json()).catch(()=>null)]);
+  ALL=s.stocks;META=s.meta;INST=i;SC=sc;FL=fl;
   fetch('data/calendar.json').then(r=>r.json()).then(c=>{CAL=c;dateBar();if(sel)render();}).catch(()=>{dateBar();});
   if(SC){const c=$('#covN');if(c)c.textContent='技術分析目前涵蓋 '+SC.meta.n+' 檔（資料日期 '+dfmt(SC.meta.date)+'）';}
-  scrUI();dateBar();
+  scrUI();dateBar();xfUI();
   $('#upd').textContent=META.updated.replace('T',' ').slice(0,16)+' (台北)';
   $('#cTw').innerHTML=META.counts.twse+'<em> 檔</em>';$('#cTp').innerHTML=META.counts.tpex+'<em> 檔</em>';
   $('#dTw').textContent='交易日期 '+dfmt(META.twseDate);$('#dTp').textContent='交易日期 '+dfmt(META.tpexDate);
@@ -40,13 +40,14 @@ function render(){
   if(view==='watch')L=L.filter(x=>w.includes(x.code));if(view==='etf')L=L.filter(x=>x.etf);
   if(mkt==='ETF')L=L.filter(x=>x.etf);else if(mkt)L=L.filter(x=>x.market===mkt);
   if(q)L=L.filter(x=>x.code.toLowerCase().includes(q)||x.name.toLowerCase().includes(q));
+  if(XF)L=L.filter(xfPass);
   if(SC&&(scF||tierF>=0))L=L.filter(x=>{const a=SC.items[x.code];return a&&(!scF||a.scen.includes(scF))&&(tierF<0||a.tier===tierF);});
   const k=$('#sort').value;const pct=x=>x.change/(x.close-x.change);
   L=[...L].sort(k==='code'?(a,b)=>a.code.localeCompare(b.code):k==='change'?(a,b)=>pct(b)-pct(a):(a,b)=>(b[k]||0)-(a[k]||0));
   $('#listTitle').textContent={all:'全部股票',watch:'我的自選',etf:'ETF',w25:'全部股票'}[view];$('#listCount').textContent=L.length+' 檔';if(SC)scrStatus(L.length);
   const ld=$('#listdate');if(ld)ld.innerHTML=`資料日期 上市 ${dfmt(META.twseDate)} · 上櫃 ${dfmt(META.tpexDate)}${META.twseDate!==META.tpexDate?' <span class="stalechip">兩市場資料日不同</span>':''}`;
   $('#list').innerHTML=L.slice(0,300).map(x=>`<div class="row ${x.code===sel?'sel':''}" data-c="${x.code}"><span class="star ${w.includes(x.code)?'on':''}" data-s="${x.code}">${w.includes(x.code)?'★':'☆'}</span>
-  <div class="nm"><b>${x.name}</b><small>${x.code}<span class="tag">${x.market}${x.etf?' · ETF':''}</span>${ETFSET.has(x.code)?'<span class="tag hold">持股明細</span>':''}${SC&&SC.items[x.code]?` <span class="tier t${SC.items[x.code].tier}">${TIERS[SC.items[x.code].tier]}</span>`:(x.hasHistory?'':' <span title="尚無月歷史">◦</span>')}</small></div>
+  <div class="nm"><b>${x.name}</b><small>${x.code}<span class="tag">${x.market}${x.etf?' · ETF':''}</span>${ETFSET.has(x.code)?'<span class="tag hold">持股明細</span>':''}${flHtml(x.code)}${SC&&SC.items[x.code]?` <span class="tier t${SC.items[x.code].tier}">${TIERS[SC.items[x.code].tier]}</span>`:(x.hasHistory?'':' <span title="尚無月歷史">◦</span>')}</small></div>
   <div class="px"><b>${fmt(x.close)}</b><small class="${cls(x.change)}">${sg(x.change)}${fmt(x.change)} (${sg(x.change)}${fmt(pct(x)*100)}%)</small></div></div>`).join('')||'<div class="empty">沒有符合的股票</div>';
   if(L.length>300)$('#list').insertAdjacentHTML('beforeend','<div class="empty">僅顯示前 300 檔，請用搜尋縮小範圍</div>');
   $('#list').querySelectorAll('.row').forEach(r=>r.onclick=e=>{if(e.target.dataset.s)toggle(e.target.dataset.s);else{pick(r.dataset.c);toDetail();}});
@@ -103,6 +104,41 @@ function dateBar(){
    <span class="db-chip ${kind}">${chip}</span>${beyond?`<span class="db-note">休市日程只涵蓋 ${yr} 年，之後僅排除週末</span>`:''}
    <span class="db-src">來源：<a href="${CAL?CAL.source:'#'}" target="_blank" rel="noreferrer">證交所休市日程 ↗</a>${CAL&&Object.keys(CAL.temp).length?' · 臨時休市由證交所無資料推定':''}</span>`;
 }
+/* ===== 處置／注意／全額交割標記（證交所 notice、punish、TWT85U；櫃買 trading_warning、disposal、cmode） ===== */
+let FL=null,XF='';
+const flOf=c=>FL&&FL.items&&FL.items[c];
+const dmd=d=>d?d.slice(5).replace('-','/'):'';
+function flTags(c){const f=flOf(c);if(!f)return [];const t=[];
+  if(f.p)t.push(['p','處置',`處置期間 ${dfmt(f.p.s)}～${dfmt(f.p.e)}｜${f.p.r}${f.p.mt?'｜'+f.p.mt:''}`]);
+  if(f.z)t.push(['p',f.z,'櫃買中心：停止交易']);
+  if(f.f)t.push(['f',f.f.per?'全額交割·分盤':'全額交割',f.f.k+(f.f.per?'（分盤集合競價）':'')]);
+  if(f.g)t.push(['g',f.g,'櫃買中心：管理股票']);
+  if(f.n)t.push(['n',`注意${f.n[0].c?'×'+f.n[0].c:''}`,f.n.map(n=>dfmt(n.d)+' '+n.t).join('；')]);
+  return t;}
+const flHtml=c=>flTags(c).map(([k,l,tt])=>`<span class="fl ${k}" title="${tt.replace(/"/g,'&quot;')}">${l}</span>`).join('');
+function flagCard(s){const f=flOf(s.code);if(!FL)return '';
+  if(!f)return `<div class="rcard flagc ok"><div class="rc-head"><h3>交易限制與警示</h3><span>${dfmt(FL.asof)} 官方資料</span></div><p class="rc-note" style="margin:0">此股在 ${dfmt(FL.asof)} 沒有處置、全額交割、管理股票或近 3 個公布日的注意股紀錄。<a href="https://www.twse.com.tw/zh/announcement/punish.html" target="_blank" rel="noreferrer">證交所公告 ↗</a></p></div>`;
+  const nxt=typeof nextTDafter==='function'?nextTDafter(FL.asof):null;let o='';
+  if(f.p){const p=f.p,left=p.e<=FL.asof;o+=`<div class="flr p"><b>處置股</b><span>${p.r}${p.m?'・'+p.m:''}</span><div>處置期間 <b>${dfmt(p.s)}～${dfmt(p.e)}</b>（公布日 ${dfmt(p.pub)}）${left?`<em>資料日 ${dmd(FL.asof)} 已是處置最後一日，期滿後恢復，仍以交易所公告為準</em>`:''}</div>
+   <div>${p.mt?`撮合方式：分盤交易，${p.mt}。`:'撮合方式：分盤交易。'}${p.cash?'委託時需預收款券（買進收足價金、賣出收足股票）。':''}</div></div>`;}
+  if(f.f)o+=`<div class="flr f"><b>${f.f.k}</b><span>變更交易方法</span><div>證券商須先收足款券才能受理委託${f.f.per?'；此股採分盤集合競價（約每 30 分鐘撮合一次）':''}。</div></div>`;
+  if(f.g)o+=`<div class="flr g"><b>${f.g}</b><span>櫃買中心</span><div>列為管理股票，交易方式受限，請以櫃買中心公告為準。</div></div>`;
+  if(f.z)o+=`<div class="flr p"><b>${f.z}</b><span>櫃買中心</span></div>`;
+  if(f.n)o+=`<div class="flr n"><b>注意股</b><span>近 3 個公布日內 ${f.n.length} 次公告${f.n[0].c?`・累計 ${f.n[0].c} 次`:''}</span>${f.n.map(n=>`<div><b>${dfmt(n.d)}</b>　${n.t}</div>`).join('')}</div>`;
+  const tw=s.market==='上市';
+  return `<div class="rcard flagc"><div class="rc-head"><h3>交易限制與警示</h3><span>${flTags(s.code).map(t=>t[1]).join('・')}・${dfmt(FL.asof)} 官方資料</span></div>${o}
+   <p class="rc-note">來源：${tw?`<a href="${FL.sources.twsePunish}" target="_blank" rel="noreferrer">證交所 處置股</a>、<a href="${FL.sources.twseNotice}" target="_blank" rel="noreferrer">注意股</a>、<a href="${FL.sources.twseTWT85U}" target="_blank" rel="noreferrer">TWT85U 變更交易</a>`:`<a href="${FL.sources.tpexDisposal}" target="_blank" rel="noreferrer">櫃買中心 處置</a>、<a href="${FL.sources.tpexNotice}" target="_blank" rel="noreferrer">注意股</a>、<a href="${FL.sources.tpexCmode}" target="_blank" rel="noreferrer">變更交易／管理股票</a>`}（↗ 官方資料）。標記是官方公告的整理，不是買賣建議；「避開標的」只是風險提醒。</p></div>`;}
+/* 清單篩選（交易警示等）：XFDEF 每項 {g 群組, id, name, title, t(code,stock)} */
+const XFDEF=[
+ {g:'交易警示',id:'avoid',name:'避開標的',title:'處置中、全額交割（變更交易）、管理股票、停止交易',t:c=>!!(FL&&FL.avoid.includes(c))},
+ {g:'交易警示',id:'punish',name:'處置中',title:'證交所／櫃買中心公告處置期間內',t:c=>!!(flOf(c)&&flOf(c).p)},
+ {g:'交易警示',id:'notice',name:'注意股',title:'近 3 個公布日被公布為注意股',t:c=>!!(flOf(c)&&flOf(c).n)},
+ {g:'交易警示',id:'full',name:'全額交割',title:'變更交易方法（全額交割）',t:c=>!!(flOf(c)&&flOf(c).f)},
+];
+const xfPass=x=>!XF||XFDEF.find(d=>d.id===XF).t(x.code,x);
+function xfUI(){const el=$('#xfbox');if(!el)return;const gs=[...new Set(XFDEF.map(d=>d.g))];
+  el.innerHTML=gs.map(g=>`<div class="scr-h"><b>${g}</b><span>${g==='交易警示'&&FL?'資料 '+dfmt(FL.asof)+'（官方）':''}</span></div><div class="chips">${XFDEF.filter(d=>d.g===g).map(d=>`<button data-xf="${d.id}" class="${XF===d.id?'on':''}" title="${d.title}">${d.name}<em>${ALL.filter(x=>d.t(x.code,x)).length}</em></button>`).join('')}</div>`).join('');
+  el.querySelectorAll('button').forEach(b=>b.onclick=()=>{XF=XF===b.dataset.xf?'':b.dataset.xf;xfUI();render();});}
 let CT={code:null,n:60,sel:null};
 function dayStat(rows,j){
   const r=rows[j],c=r[4],pc=j>0?rows[j-1][4]:null;
@@ -192,7 +228,7 @@ async function pick(code){
   <div class="titleprice"><div><h2>${s.name} <button class="star" style="font-size:18px;color:${W().includes(code)?'#f0a020':'#b8c1cf'}" onclick="toggle('${code}');pick('${code}')">${W().includes(code)?'★':'☆'}</button></h2><p>資料日期 ${dfmt(s.date)}${META&&s.date!==(s.market==='上市'?META.twseDate:META.tpexDate)?'<span class="stalechip">此股資料日早於市場最新日</span>':''} · 來源：${s.src}</p></div>
   <div><strong>${fmt(close)}</strong><span class="${cls(s.change)}">${sg(s.change)}${fmt(s.change)} (${sg(s.change)}${fmt(s.change/(close-s.change)*100)}%)</span></div></div>
   <div class="metrics"><span>開盤<b>${fmt(s.open)}</b></span><span>最高<b>${fmt(s.high)}</b></span><span>最低<b>${fmt(s.low)}</b></span><span>成交量<b>${fmt(s.volume/1000,0)} 張</b></span><span>成交金額<b>${fmt(s.value/1e8)} 億</b></span></div>
-  <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${s.etf?'<div id="etfpage"><div class="empty">正在載入 ETF 持股明細…</div></div>':''}`;
+  <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${flagCard(s)}${s.etf?'<div id="etfpage"><div class="empty">正在載入 ETF 持股明細…</div></div>':''}`;
   if(H){html+=`<div class="chartpanel"><div id="ctop">${chartTop(H)}</div>
   ${H.adjusted?`<div class="note2 adjnote">⚙ 已除權還原：${H.adjusted.map(a=>`${dfmt(a.date)} 除權（前收 ${fmt(a.prevClose)} → 參考價 ${fmt(a.refPrice)}，還原因子 ${fmt(a.factor,4)}，來源${a.src}）`).join('；')}。除權日以前的價格已乘以還原因子、成交量除以還原因子，均線、量比與支撐壓力皆用還原價；以下顯示的歷史價位與當時實際成交價不同。</div>`:''}<div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
   <div class="sectionlabel"><h3>接下來，看哪裡？</h3><span>價格結構觀察 · 依 ${dfmt(H.date)} 收盤 · 來源 ${s.src}</span></div>`;
