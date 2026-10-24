@@ -131,6 +131,24 @@ def nomura(code, date):
     if not t: raise EtfError("野村回應找不到股票表（改版？）")
     return dict(date=date, aum=n(fa.get("Aum")), holdings=[h for h in (hold(r[0], r[1], n(r[2]), n(r[3])) for r in t["Rows"]) if twstock(h)])
 
+def fsitc(fid, date=None):
+    """第一金投信：官網基金頁自己使用的 WebAPI.aspx/Get_hd（持股）與 Get_BuySellA（淨資產）。date=公告日（None=最新），回傳的資料日為其前一營業日。"""
+    u = "https://www.fsitc.com.tw/WebAPI.aspx/"
+    d = date.replace("-", "/") if date else ""
+    def call(m):
+        j = json.loads(curl(u + m, json_body={"pStrFundID": fid, "pStrDate": d}))
+        return json.loads(j["d"]) if j.get("d") else []
+    rows = call("Get_hd")
+    st = [r for r in rows if str(r.get("group")) == "1"]
+    if not st: raise EtfError("第一金當日無持股資料")
+    dd = ndate(st[0]["sdate"])
+    aum = None
+    try:
+        for r in call("Get_BuySellA"):
+            if "基金淨資產價值" in str(r.get("A")): aum = n(re.sub(r"[^\d.]", "", str(r.get("B")))); break
+    except Exception: pass
+    return dict(date=dd, aum=aum, holdings=[h for h in (hold(r["A"], r["B"], n(r["D"]), n(r["C"])) for r in st) if twstock(h)])
+
 def ezmoney(fund, date=None):
     jar = tempfile.mktemp()
     try:
@@ -307,12 +325,17 @@ FUNDS = [
     ("0052", "富邦科技", "富邦投信", "https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId=0052", fubon, "0052", True),
     ("0057", "富邦摩台", "富邦投信", "https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId=0057", fubon, "0057", True),
     ("00733", "富邦臺灣中小", "富邦投信", "https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId=00733", fubon, "00733", True),
+    ("00728", "第一金工業30", "第一金投信", "https://www.fsitc.com.tw/FundDetail.aspx?ID=D90", fsitc, "D90", True),
+    ("00994A", "主動第一金台股優", "第一金投信", "https://www.fsitc.com.tw/FundDetail.aspx?ID=182", fsitc, "182", True),
     ("00878", "國泰永續高股息", "國泰投信", "https://www.cathaysite.com.tw/ETF/detail/ECN", cathay, "CN", True),
 ]
 # 尚未納入（原因）：只列已實際檢查過的；不繞過任何驗證、登入或存取限制。
-NOT_COVERED = ("國泰投信（官網與下載 API 對自動化請求回 403 存取拒絕，已列入嘗試清單，取得失敗會顯示原因）；"
-               "中信投信（持股 API 需網頁工作階段 Token，無穩定公開檔案）；第一金投信、玉山投信（未找到可穩定取得的官方持股揭露；玉山官網本次連線失敗）；"
-               "安聯、聯博、摩根、貝萊德（以海外／債券型 ETF 為主，非台股持股揭露範圍）；其他未列出的 ETF")
+NOT_COVERED = ("國泰投信（官網與下載 API 對自動化請求回 403 存取拒絕）；"
+               "中信投信（持股 API 需網頁工作階段 Token，無穩定公開檔案）；"
+               "玉山投信（官網有 Incapsula 防機器人防護，不繞過）；"
+               "大華銀投信、聯邦投信（官網 TLS 憑證鏈不完整，無法安全連線，不關閉驗證）；"
+               "華南永昌投信（目前僅有全球型 ETF，無台股持股）；"
+               "安聯、聯博、摩根、貝萊德、富蘭克林華美（以海外／債券型 ETF 為主，非台股持股揭露範圍）；其他未列出的 ETF")
 
 def snaps(code): return sorted(SNAP.glob(f"{code}_*.json"), key=lambda f: f.name)
 def save(code, cur):
@@ -350,6 +373,9 @@ def fetch_one(code, fn, arg, canhist, latest):
             try:
                 time.sleep(SLEEP)
                 if fn is capital: prev = capital(arg, cur["date"])
+                elif fn is fsitc:
+                    prev = fsitc(arg, cur["date"])
+                    if prev["date"] >= cur["date"]: prev = None
                 else:
                     for d in prev_days(cur["date"], 5):
                         try: prev = fn(arg, d); break
