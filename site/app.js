@@ -48,18 +48,31 @@ function render(){
   $('#listTitle').textContent={all:'全部股票',watch:'我的自選',etf:'ETF',w25:'全部股票'}[view];$('#listCount').textContent=L.length+' 檔';if(SC)scrStatus(L.length);
   const ld=$('#listdate');if(ld)ld.innerHTML=`資料日期 上市 ${dfmt(META.twseDate)} · 上櫃 ${dfmt(META.tpexDate)}${META.twseDate!==META.tpexDate?' <span class="stalechip">兩市場資料日不同</span>':''}`;
   $('#list').innerHTML=L.slice(0,300).map(x=>`<div class="row ${x.code===sel?'sel':''}" data-c="${x.code}"><span class="star ${w.includes(x.code)?'on':''}" data-s="${x.code}">${w.includes(x.code)?'★':'☆'}</span>
-  <div class="nm"><b>${x.name}</b><small>${x.code}<span class="tag">${x.market}${x.etf?' · ETF':''}</span>${ETFSET.has(x.code)?'<span class="tag hold">持股明細</span>':''}${flHtml(x.code)}${SC&&SC.items[x.code]?` <span class="tier t${SC.items[x.code].tier}">${TIERS[SC.items[x.code].tier]}</span>`:(x.hasHistory?'':' <span title="尚無月歷史">◦</span>')}</small></div>
+  <div class="nm"><b>${x.name}</b><small>${x.code}<span class="tag">${x.market}${x.etf?' · ETF':''}</span>${ETFSET.has(x.code)?'<span class="tag hold">持股明細</span>':''}${flHtml(x.code)}${dtTags(x)}${SC&&SC.items[x.code]?` <span class="tier t${SC.items[x.code].tier}">${TIERS[SC.items[x.code].tier]}</span>`:(x.hasHistory?'':' <span title="尚無月歷史">◦</span>')}</small></div>
   <div class="px"><b>${fmt(x.close)}</b><small class="${cls(x.change)}">${sg(x.change)}${fmt(x.change)} (${sg(x.change)}${fmt(pct(x)*100)}%)</small>${SK&&SK.f(x)!=null?`<small class="sml">${SK.t(x)}</small>`:''}</div></div>`).join('')||'<div class="empty">沒有符合的股票</div>';
   if(L.length>300)$('#list').insertAdjacentHTML('beforeend','<div class="empty">僅顯示前 300 檔，請用搜尋縮小範圍</div>');
   $('#list').querySelectorAll('.row').forEach(r=>r.onclick=e=>{if(e.target.dataset.s)toggle(e.target.dataset.s);else{pick(r.dataset.c);toDetail();}});
 }
 let W25=null;
+const etfDelta=(E,code)=>{if(!E)return null;const hs=(E.holdings[code]||[]).filter(h=>h.prevShares!=null);if(!hs.length)return {n:0,d:0,up:0,dn:0};
+  return {n:hs.length,d:hs.reduce((a,h)=>a+(h.shares-h.prevShares),0),up:hs.filter(h=>h.shares>h.prevShares).length,dn:hs.filter(h=>h.shares<h.prevShares).length};};
+const lotS=d=>{if(d==null)return '—';if(!d)return '0';const z=d>0?'+':'−',a=Math.abs(d);return a<1000?`${z}${fmt(a,0)} 股`:`${z}${fmt(a/1000,0)} 張`;};
 async function overview(){
   const box=$('#detail');box.innerHTML='<div class="empty">正在載入自選 25 檔總覽…</div>';
   try{W25=W25||await fetch('data/watch25.json').then(r=>r.json());}catch(e){box.innerHTML='<div class="empty">總覽資料載入失敗</div>';return;}
+  let E_=null;try{E_=await loadEF();}catch(e){}
   if(view!=='w25')return;
   const I=W25.items,z1=v=>v==null?'—':(v>0?'+':'')+fmt(v,1);const bad=I.filter(i=>i.issues&&i.issues.length);
-  const rowh=i=>{if(!i.close)return `<tr><td colspan="9"><b>${i.name}</b> ${i.code} · ${i.issues.join('、')}</td></tr>`;
+  const xcols=i=>{const o=CS&&CS.items[i.code],c=o&&o.c,q=o&&o.i,ed=etfDelta(E_,i.code),fl=flHtml(i.code);
+   return `<td class="num">${c?`<b class="${cls(c[2])}">${lotS(c[2]*1000).replace(' 張','')}</b><small>5 日 · 單日 ${sgn(c[1])}</small>`:'<small>官方未列入</small>'}</td>
+   <td class="num">${c&&c[4]!=null?`<b>${fmt(c[4],1)}%</b><small>融資餘額 ${fmt(c[0],0)} 張</small>`:'<small>—</small>'}</td>
+   <td class="num">${ed==null?'<small>載入失敗</small>':ed.n?`<b class="${cls(ed.d)}">${lotS(ed.d)}</b><small>${ed.n} 檔 ETF · 增 ${ed.up} 減 ${ed.dn}</small>`:'<small>無持股比對</small>'}</td>
+   <td class="num">${q?`<small>外資 <b class="${cls(q[0])}">${q[0]>0?'連買 '+q[0]:q[0]<0?'連賣 '+(-q[0]):'—'}</b>${q[0]?' 日':''}</small><small>投信 <b class="${cls(q[1])}">${q[1]>0?'連買 '+q[1]:q[1]<0?'連賣 '+(-q[1]):'—'}</b>${q[1]?' 日':''}</small>`:'<small>—</small>'}</td>
+   <td>${fl||'<small>無</small>'}</td>`;};
+  const totRow=I=>{const ok=I.filter(i=>i.close),cc=ok.map(i=>CS&&CS.items[i.code]&&CS.items[i.code].c).filter(Boolean),ed=ok.map(i=>etfDelta(E_,i.code)).filter(e=>e&&e.n);
+   const sm=ok.reduce((a,i)=>a+(i.inst?i.inst.total:0),0),m5=cc.reduce((a,c)=>a+(c[2]||0),0),e=ed.reduce((a,x)=>a+x.d,0);
+   return `<tr class="ovtot"><td><b>合計</b><small>${ok.length} 檔</small></td><td></td><td></td><td></td><td></td><td class="num"><b class="${cls(sm)}">${sm>0?'+':sm<0?'−':''}${fmt(Math.abs(sm),0)}</b><small>法人合計（張）</small></td><td></td><td class="num"><b class="${cls(m5)}">${m5>0?'+':m5<0?'−':''}${fmt(Math.abs(m5),0)}</b><small>${cc.length} 檔有融資資料</small></td><td></td><td class="num"><b class="${cls(e)}">${lotS(e)}</b><small>${ed.length} 檔有 ETF 比對</small></td><td></td><td></td><td></td></tr>`;};
+  const rowh=i=>{if(!i.close)return `<tr><td colspan="13"><b>${i.name}</b> ${i.code} · ${i.issues.join('、')}</td></tr>`;
    const s1=i.s1,r1=i.r1,t=i.trend,b=i.box,n=i.inst;
    return `<tr data-c="${i.code}"><td><b>${i.name}</b><small>${i.code} · ${i.market}</small></td>
    <td class="num"><b>${fmt(i.close)}</b><small class="${cls(i.change)}">${sg(i.change)}${fmt(i.pct)}%</small></td>
@@ -68,12 +81,13 @@ async function overview(){
    <td class="num">${i.volRatio==null?'—':fmt(i.volRatio)+' 倍'}</td>
    <td class="num">${n?`<b class="${cls(n.total)}">${z1(n.total).replace(/\.0$/,'')}</b><small>近3日 ${z1(n.sum3).replace(/\.0$/,'')}</small>`:'<small>官方未列入</small>'}</td>
    <td>${t?`<span class="pill ${t.state==='守住'?'ok':'warn'}">上升趨勢線${t.state}</span>`:''}${b?`<span class="pill">${b.days} 日平台 · ${b.state}</span>`:''}${!t&&!b?'<small>—</small>':''}</td>
+   ${xcols(i)}
    <td class="num"><small>${i.days||0} 日${i.adjusted?' · 已還原':''}</small></td></tr>`;};
   box.innerHTML=`<div class="eyebrow">WATCHLIST OVERVIEW <span>自選 ${I.length} 檔 · 資料日期 ${dfmt(W25.date)}</span></div>
   <div class="titleprice"><div><h2>自選 ${I.length} 檔總覽</h2><p>點列可看個股頁 · 價位為本站依歷史價格結構自行計算的觀察價位，不是目標價或買賣建議</p></div></div>
-  <div class="tablewrap"><table class="ov"><tr><th>股票</th><th>收盤 / 漲跌</th><th>第一支撐<small>距現價</small></th><th>第一壓力<small>距現價</small></th><th>量比<small>對20日均量</small></th><th>法人買賣超<small>張 · 最新日</small></th><th>形態（觀察用）</th><th>歷史</th></tr>${I.map(rowh).join('')}</table></div>
+  <div class="tablewrap"><table class="ov"><tr><th>股票</th><th>收盤 / 漲跌</th><th>第一支撐<small>距現價</small></th><th>第一壓力<small>距現價</small></th><th>量比<small>對20日均量</small></th><th>法人買賣超<small>張 · 最新日</small></th><th>形態（觀察用）</th><th>融資增減<small>5 日 · 張</small></th><th>融資使用率</th><th>ETF 增減<small>股數變動</small></th><th>連買連賣<small>含最新日</small></th><th>處置／注意</th><th>歷史</th></tr>${I.map(rowh).join('')}${totRow(I)}</table></div>
   <p class="note2">${bad.length?'資料提醒：'+bad.map(i=>`${i.name}（${i.issues.join('、')}）`).join('；')+'。':'25 檔皆具收盤行情、均線、量比與支撐壓力。'}</p>
-  <p class="note2">法人買賣超＝外資＋投信＋自營商合計（千股換算張），來源證交所 T86／櫃買中心；形態為依歷史價量自動偵測的觀察標示，不預測突破方向。量比＝最新日成交量 ÷ 近 20 日均量。</p>`;
+  <p class="note2">法人買賣超＝外資＋投信＋自營商合計（千股換算張），來源證交所 T86／櫃買中心；融資增減＝近 5 日融資餘額變化、使用率＝融資餘額÷融資限額（證交所 MI_MARGN／櫃買融資融券）；ETF 增減＝本站已接入的投信 ETF 持股，與前一揭露日比較的股數變動合計（含申購買回，不等於主動買賣）；連買連賣＝外資、投信含最新日的連續天數；處置／注意＝證交所、櫃買中心公告；形態為依歷史價量自動偵測的觀察標示，不預測突破方向。量比＝最新日成交量 ÷ 近 20 日均量。</p>`;
   box.querySelectorAll('tr[data-c]').forEach(r=>r.onclick=()=>{pick(r.dataset.c);toDetail();});
 }
 /* ===== 資料日期／休市提示（證交所 holidaySchedule 休市日程 + 資料推定的臨時休市） ===== */
@@ -106,11 +120,43 @@ function dateBar(){
    <span class="db-src">來源：<a href="${CAL?CAL.source:'#'}" target="_blank" rel="noreferrer">證交所休市日程 ↗</a>${CAL&&Object.keys(CAL.temp).length?' · 臨時休市由證交所無資料推定':''}</span>`;
 }
 /* ===== 處置／注意／全額交割標記（證交所 notice、punish、TWT85U；櫃買 trading_warning、disposal、cmode） ===== */
+/* ===== 當沖輔助：振幅、成交值排行、收盤鎖漲跌停、流動性（STOCK_DAY_ALL／dailyQuotes 當日行情） ===== */
+const LIQ_WARN=500,LIQ_LOW=100;   // 成交張數：<500 偏低、<100 極低
+const _tk=(p,etf)=>etf?(p<50?0.01:0.05):(p<10?0.01:p<50?0.05:p<100?0.1:p<500?0.5:p<1000?1:5);
+let _VR=null;
+function vrank(){if(_VR)return _VR;_VR={};const a=ALL.filter(x=>x.value>0).sort((p,q)=>q.value-p.value);a.forEach((x,i)=>{_VR[x.code]={all:i+1,n:a.length};});['上市','上櫃'].forEach(m=>{const b=a.filter(x=>x.market===m);b.forEach((x,i)=>{_VR[x.code].mk=i+1;_VR[x.code].mn=b.length;});});return _VR;}
+function dtOf(x){
+  if(x._dt!==undefined)return x._dt;
+  const pc=x.close!=null&&x.change!=null?+(x.close-x.change).toFixed(2):null;
+  if(!pc||pc<=0||x.high==null||x.low==null){return x._dt=null;}
+  const r1=pc*1.1,r2=pc*0.9,t1=_tk(r1,x.etf),t2=_tk(r2,x.etf);
+  const U=+(Math.floor(r1/t1+1e-9)*t1).toFixed(2),D=+(Math.ceil(r2/t2-1e-9)*t2).toFixed(2),vol=(x.volume||0)/1000;
+  return x._dt={pc,amp:(x.high-x.low)/pc*100,U,D,lockU:x.volume>0&&Math.abs(x.close-U)<1e-6,lockD:x.volume>0&&Math.abs(x.close-D)<1e-6,
+    flat:x.open===x.high&&x.high===x.low&&x.low===x.close,vol,liq:vol<=0?'none':vol<LIQ_LOW?'low':vol<LIQ_WARN?'warn':'ok'};
+}
+const dtTags=x=>{const d=dtOf(x);if(!d)return '';let o='';
+  if(d.lockU)o+=`<span class="fl dtu" title="收盤價＝依前收盤 ${fmt(d.pc)} ×110% 推算的漲停價 ${fmt(d.U)}${d.flat?'（一字，開高低收同價）':''}">收漲停</span>`;
+  if(d.lockD)o+=`<span class="fl dtd" title="收盤價＝依前收盤 ${fmt(d.pc)} ×90% 推算的跌停價 ${fmt(d.D)}${d.flat?'（一字，開高低收同價）':''}">收跌停</span>`;
+  if(d.liq==='low')o+=`<span class="fl dtl" title="成交量 ${fmt(d.vol,0)} 張，低於 ${LIQ_LOW} 張，流動性極低，進出可能滑價">低量</span>`;return o;};
+function dtCard(s){
+  const d=dtOf(s);if(!d)return `<div class="rcard dtc"><div class="rc-head"><h3>當沖輔助</h3><span>資料不足</span></div><p class="rc-note">缺少前收盤或高低價，無法計算振幅與漲跌停。</p></div>`;
+  const r=vrank()[s.code]||{},liqT={ok:'成交量尚可',warn:`偏低（< ${LIQ_WARN} 張）`,low:`極低（< ${LIQ_LOW} 張）`,none:'當日無成交'}[d.liq];
+  const lim=d.lockU?`<b class="up">收盤鎖漲停</b>`:d.lockD?`<b class="down">收盤鎖跌停</b>`:`<b>未鎖漲跌停</b>`;
+  return `<div class="rcard dtc"><div class="rc-head"><h3>當沖輔助</h3><span>${dfmt(s.date)} 當日行情 · 來源 ${s.src}</span></div>
+  <div class="m4"><div><small>振幅</small><b>${fmt(d.amp,2)}<em>%</em></b><small>(最高 ${fmt(s.high)} − 最低 ${fmt(s.low)}) ÷ 前收 ${fmt(d.pc)}</small></div>
+  <div><small>成交值排行</small><b>第 ${r.all||'—'}<em> / ${r.n||'—'}</em></b><small>${fmt(s.value/1e8,2)} 億 · ${s.market}第 ${r.mk||'—'} / ${r.mn||'—'}</small></div>
+  <div><small>成交量</small><b class="${d.liq==='low'||d.liq==='none'?'down':d.liq==='warn'?'warnc':''}">${fmt(d.vol,0)}<em> 張</em></b><small>${liqT}</small></div>
+  <div><small>漲跌停（依前收±10%推算）</small>${lim}<small>漲停 ${fmt(d.U)} · 跌停 ${fmt(d.D)}${d.flat?' · 一字':''}</small></div></div>
+  ${d.liq==='low'||d.liq==='warn'||d.liq==='none'?`<p class="rc-note dtw">⚠ 流動性警示：成交量 ${fmt(d.vol,0)} 張，${d.liq==='none'?'當日無成交':`低於 ${d.liq==='low'?LIQ_LOW:LIQ_WARN} 張`}，當沖進出可能難以成交或價差擴大。門檻為本站自訂。</p>`:''}
+  <p class="rc-note">振幅與漲跌停以官方當日行情自行計算；漲跌停價依「前收盤 ±10%、依升降單位取整」推算，除權息日以官方公告為準（本站不推算參考價）。成交值排行為當日全市場（上市＋上櫃，含 ETF）排名。這是資料特徵，不是當沖或買賣建議。</p></div>`;}
 /* 清單排序：籌碼類（CSV）— 無資料者排最後；排序時列出該指標值 */
 const csI=(x,k)=>{const o=CS&&CS.items[x.code];return o&&o.i?o.i[k]:null;};
 const csC=(x,k)=>{const o=CS&&CS.items[x.code];return o&&o.c?o.c[k]:null;};
 const csQ=x=>{const o=CS&&CS.items[x.code];return o&&o.q?o.q[0]:null;};
 const SORTS={
+ 'dt:amp':{f:x=>{const d=dtOf(x);return d?d.amp:null},t:x=>`振幅 ${fmt(dtOf(x).amp,2)}%`},
+ 'dt:val':{f:x=>x.value,t:x=>`成交值 ${fmt(x.value/1e8,2)} 億 · 第 ${(vrank()[x.code]||{}).all||'—'} 名`},
+ 'dt:low':{f:x=>{const d=dtOf(x);return d&&d.vol>0?-d.vol:null},t:x=>`成交 ${fmt(dtOf(x).vol,0)} 張`},
  'cs:fs':{f:x=>{const v=csI(x,0);return v>0?v:null},t:x=>`外資連買 ${csI(x,0)} 日`},
  'cs:fsell':{f:x=>{const v=csI(x,0);return v<0?-v:null},t:x=>`外資連賣 ${-csI(x,0)} 日`},
  'cs:ts':{f:x=>{const v=csI(x,1);return v>0?v:null},t:x=>`投信連買 ${csI(x,1)} 日`},
@@ -153,6 +199,11 @@ const XFDEF=[
  {g:'交易警示',id:'punish',name:'處置中',title:'證交所／櫃買中心公告處置期間內',t:c=>!!(flOf(c)&&flOf(c).p)},
  {g:'交易警示',id:'notice',name:'注意股',title:'近 3 個公布日被公布為注意股',t:c=>!!(flOf(c)&&flOf(c).n)},
  {g:'交易警示',id:'full',name:'全額交割',title:'變更交易方法（全額交割）',t:c=>!!(flOf(c)&&flOf(c).f)},
+ {g:'當沖',id:'lockU',name:'收盤鎖漲停',title:'收盤價＝依前收盤 ±10% 推算的漲停價（有成交）',t:(c,x)=>{const d=dtOf(x);return !!(d&&d.lockU)}},
+ {g:'當沖',id:'lockD',name:'收盤鎖跌停',title:'收盤價＝依前收盤 ±10% 推算的跌停價（有成交）',t:(c,x)=>{const d=dtOf(x);return !!(d&&d.lockD)}},
+ {g:'當沖',id:'amp7',name:'振幅≥7%',title:'(最高−最低)÷前收 ≥ 7%',t:(c,x)=>{const d=dtOf(x);return !!(d&&d.amp>=7)}},
+ {g:'當沖',id:'top100',name:'成交值前100',title:'當日全市場成交值前 100 名',t:(c,x)=>((vrank()[x.code]||{}).all||9999)<=100},
+ {g:'當沖',id:'liq',name:'低量<500張',title:'成交量低於 500 張（流動性警示）',t:(c,x)=>{const d=dtOf(x);return !!(d&&(d.liq==='warn'||d.liq==='low'))}},
  {g:'籌碼',id:'fbuy3',name:'外資連買≥3日',title:'外資含最新日連續買超 ≥ 3 個交易日（T86／櫃買）',t:(c,x)=>csI(x,0)>=3},
  {g:'籌碼',id:'fsell3',name:'外資連賣≥3日',title:'外資含最新日連續賣超 ≥ 3 個交易日',t:(c,x)=>csI(x,0)<=-3},
  {g:'籌碼',id:'tbuy3',name:'投信連買≥3日',title:'投信含最新日連續買超 ≥ 3 個交易日',t:(c,x)=>csI(x,1)>=3},
@@ -337,7 +388,7 @@ async function pick(code){
   <div class="titleprice"><div><h2>${s.name} <button class="star" style="font-size:18px;color:${W().includes(code)?'#f0a020':'#b8c1cf'}" onclick="toggle('${code}');pick('${code}')">${W().includes(code)?'★':'☆'}</button></h2><p>資料日期 ${dfmt(s.date)}${META&&s.date!==(s.market==='上市'?META.twseDate:META.tpexDate)?'<span class="stalechip">此股資料日早於市場最新日</span>':''} · 來源：${s.src}</p></div>
   <div><strong>${fmt(close)}</strong><span class="${cls(s.change)}">${sg(s.change)}${fmt(s.change)} (${sg(s.change)}${fmt(s.change/(close-s.change)*100)}%)</span></div></div>
   <div class="metrics"><span>開盤<b>${fmt(s.open)}</b></span><span>最高<b>${fmt(s.high)}</b></span><span>最低<b>${fmt(s.low)}</b></span><span>成交量<b>${fmt(s.volume/1000,0)} 張</b></span><span>成交金額<b>${fmt(s.value/1e8)} 億</b></span></div>
-  <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${flagCard(s)}${s.etf?'<div id="etfpage"><div class="empty">正在載入 ETF 持股明細…</div></div>':''}`;
+  <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${flagCard(s)}${dtCard(s)}${s.etf?'<div id="etfpage"><div class="empty">正在載入 ETF 持股明細…</div></div>':''}`;
   if(H){html+=`<div class="chartpanel"><div id="ctop">${chartTop(H)}</div>
   ${H.adjusted?`<div class="note2 adjnote">⚙ 已除權還原：${H.adjusted.map(a=>`${dfmt(a.date)} 除權（前收 ${fmt(a.prevClose)} → 參考價 ${fmt(a.refPrice)}，還原因子 ${fmt(a.factor,4)}，來源${a.src}）`).join('；')}。除權日以前的價格已乘以還原因子、成交量除以還原因子，均線、量比與支撐壓力皆用還原價；以下顯示的歷史價位與當時實際成交價不同。</div>`:''}<div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
   ${gapCard(H)}<div class="sectionlabel"><h3>接下來，看哪裡？</h3><span>價格結構觀察 · 依 ${dfmt(H.date)} 收盤 · 來源 ${s.src}</span></div>`;
@@ -411,9 +462,11 @@ let ETFSET=new Set(),etfSort={k:'w',d:-1},etfAct=false,etfPS={k:'w',d:-1},etfPTa
 const fundOf=(E,c)=>E.funds.find(f=>f.code===c&&f.date);
 const loadEF=()=>EF||(EF=fetch('data/etf.json').then(r=>r.json()));
 const aumFmt=v=>v==null?'—':v>=1e8?fmt(v/1e8,v>=1e10?0:1)+' 億':fmt(v/1e4,0)+' 萬';
+const lotF=sh=>!sh?'0':sh<1000?`<1 張`:fmt(sh/1000,0)+' 張';   // 股數→張（四捨五入到整張；不足 1 張標「<1 張」，下方小字仍列精確股數）
+const lotD=d=>{if(!d)return '0';const z=d>0?'+':'−',a=Math.abs(d);return a<1000?`${z}${fmt(a,0)} 股`:`${z}${fmt(a/1000,0)} 張`;};
 const stOf=(sh,ps)=>ps==null?'首次收錄，待下一期':!ps&&sh?'新進':!sh?'剔除':sh>ps?'增持':sh<ps?'減持':'不變';
 const dCell=(sh,ps)=>{if(ps==null)return `<span class="flat">—</span><small>首次收錄，待下一期</small>`;const d=sh-ps,st=stOf(sh,ps);
-  return `<b class="${cls(d)}">${d?sg(d)+fmt(d/1000,3):'0.000'}</b><small>${st}${ps>0&&d?` · ${sg(d)}${fmt(d/ps*100,2)}%`:''}</small>`;};
+  return `<b class="${cls(d)}">${lotD(d)}</b><small>${st}${ps>0&&d?` · ${sg(d)}${fmt(d/ps*100,2)}%`:''}</small>`;};
 const sortTh=(lab,k,S)=>`<th class="sk ${S.k===k?'on':''}" data-sk="${k}" tabindex="0" role="button" title="點擊以此欄排序">${lab}<i>${S.k===k?(S.d<0?'▼':'▲'):'↕'}</i></th>`;
 function etfHolders(s,E){
   const F=E.funds,fm=Object.fromEntries(F.map(f=>[f.code,f]));
@@ -429,7 +482,7 @@ function etfHolders(s,E){
    <div class="tabs">${['全部','增加','減少'].map(t=>`<button data-t="${t}" class="${t===etfTab?'on':''}">${t}</button>`).join('')}<button id="etfAct" class="${etfAct?'on':''}" aria-pressed="${etfAct}">只看主動式 ETF</button><span>顯示 ${R.length} / ${all.length} 筆</span></div>
    ${R.length?`<div class="etfwrap"><table class="etft"><tr><th>ETF / 投信 / 基準日</th>${sortTh('權重','w',etfSort)}${sortTh('持有張數','s',etfSort)}${sortTh('估算金額','a',etfSort)}${sortTh('增減張數 / 增減幅','d',etfSort)}</tr>${R.map(r=>`<tr><td><a href="#${r.fund}" class="etflink" data-go="${r.fund}">${r.fund} ${r.f.name}</a>${r.f.active?'<span class="act">主動式</span>':''}<small>${r.f.issuer} · 基準日 ${r.f.date}${r.f.prevDate?' · 比較 '+r.f.prevDate:''}${r.f.stale?' · <b class="warn">沿用舊資料</b>':''} · <a href="${r.f.url}" target="_blank" rel="noreferrer">官網 ↗</a></small></td>
    <td>${fmt(r.weight)}%<small>${r.prevWeight==null?'—':'前期 '+fmt(r.prevWeight)+'%（'+sg(r.weight-r.prevWeight)+fmt(r.weight-r.prevWeight)+'）'}</small></td>
-   <td>${r.shares?fmt(r.shares/1000,3):'0'}<small>${r.shares?fmt(r.shares,0)+' 股':'已剔除'}</small></td>
+   <td>${lotF(r.shares)}<small>${r.shares?fmt(r.shares,0)+' 股':'已剔除'}</small></td>
    <td>${r.amt==null?'—':aumFmt(r.amt)}<small>${r.f.aum?'ETF 規模 '+aumFmt(r.f.aum):'未取得規模'}</small></td>
    <td class="${cls(r.d)}">${dCell(r.shares,r.prevShares)}</td></tr>`).join('')}</table></div>`
    :`<p class="rc-note">${all.length?'目前沒有符合此篩選的紀錄。':'在已成功取得的 ETF 名單中未找到本股；未接入或失敗的 ETF 無法判定。'}</p>`}
@@ -460,11 +513,11 @@ function etfPage(s,E){
   return `<div class="rcard etfpg"><div class="rc-head"><h3>持股明細</h3><span>基準日 ${f.date}${f.prevDate?` · 比較 ${f.prevDate}`:''}</span></div>
    <div class="metrics etfm"><span>投信<b>${f.issuer}</b></span><span>類型<b>${f.active?'主動式 ETF':'被動式 ETF'}</b></span><span>持股檔數<b>${held.length}</b></span><span>淨資產<b>${aumFmt(f.aum)}</b></span><span>增持／新進<b class="up">${add}${nw?`（含新進 ${nw}）`:''}</b></span><span>減持／剔除<b class="down">${cut+out}${out?`（含剔除 ${out}）`:''}</b></span></div>
    <p class="rc-note">來源：<a href="${f.url}" target="_blank" rel="noreferrer">${f.issuer}官網公開持股 ↗</a>（基準日 ${f.date}，僅列台股 4 碼持股，期貨、現金與外國股不列入）；股價與漲跌用證交所／櫃買中心 ${dfmt(META.twseDate)} 官方收盤資料，漲紅跌綠。${f.prevDate?`增減＝基準日股數減前一個揭露日（${f.prevDate}）股數，含申購買回與公司行動，不等於經理人主動買賣。`:'<b>首次收錄，待下一期</b>：目前只有一期資料，下一個揭露日才會有增減。'}${f.stale?` <b class="warn">本次抓取失敗，沿用 ${f.date} 舊資料（${f.reason||''}）。</b>`:''}</p>
-   <div class="tabs">${['全部','增加','減少'].map(t=>`<button data-pt="${t}" class="${t===etfPTab?'on':''}">${t}</button>`).join('')}<span>顯示 ${R.length} / ${rows.length} 筆</span></div>
+   <div class="tabs">${['全部','增加','減少'].map(t=>`<button data-pt="${t}" class="${t===etfPTab?'on':''}">${t}</button>`).join('')}<span>顯示 ${R.length} / ${rows.length} 筆${out?`（含本期剔除 ${out} 檔；現持股 ${held.length} 檔）`:''}</span></div>
    <div class="etfwrap"><table class="etft cons"><tr><th>股票</th>${sortTh('股價','c',etfPS)}${sortTh('漲跌幅','p',etfPS)}${sortTh('權重','w',etfPS)}${sortTh('持有張數','s',etfPS)}${sortTh('估算金額','a',etfPS)}${sortTh('增減張數 / 增減幅','d',etfPS)}</tr>${R.map(r=>{const x=r.x;
    return `<tr><td><span class="star ${w.includes(r.code)?'on':''}" data-cs="${r.code}" role="button" aria-label="加入自選">${w.includes(r.code)?'★':'☆'}</span><a href="#${r.code}" class="etflink" data-go="${r.code}"><b>${r.name||'（無行情資料）'}</b><small>${r.code}${x?' · '+x.market:''}</small></a></td>
    <td>${x?`<b>${fmt(x.close)}</b><small class="${cls(x.change)}">${sg(x.change)}${fmt(x.change)}</small>`:'—'}</td><td class="${cls(r.pct)}">${r.pct==null?'—':sg(r.pct)+fmt(r.pct)+'%'}</td>
-   <td>${fmt(r.weight)}%<small>${r.prevWeight==null?'—':'前期 '+fmt(r.prevWeight)+'%'}</small></td><td>${r.shares?fmt(r.shares/1000,3):'0'}<small>${r.shares?fmt(r.shares,0)+' 股':'已剔除'}</small></td>
+   <td>${fmt(r.weight)}%<small>${r.prevWeight==null?'—':'前期 '+fmt(r.prevWeight)+'%'}</small></td><td>${lotF(r.shares)}<small>${r.shares?fmt(r.shares,0)+' 股':'已剔除'}</small></td>
    <td>${r.amt==null?'—':aumFmt(r.amt)}</td><td class="${cls(r.d)}">${dCell(r.shares,r.prevShares)}</td></tr>`}).join('')}</table></div>
    <p class="rc-note">估算金額＝${f.issuer} 公布的淨資產 ${aumFmt(f.aum)} × 權重，是估算值；點股票名稱可回該股個股頁，☆ 可加入自選。預設按權重由高到低排序，可點欄位標題切換。</p></div>`;
 }
