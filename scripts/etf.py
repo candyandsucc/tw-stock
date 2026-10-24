@@ -80,14 +80,14 @@ def yuanta(code, date=None):
     except Exception: raise EtfError("元大頁面解析失敗（node 執行錯誤）")
     if j.get("error"): raise EtfError(f"元大頁面改版：{j['error']}")
     hs = [hold(x["code"], x["name"], x["shares"], x["weight"]) for x in j["holdings"]]
-    return dict(date=j["date"], holdings=[h for h in hs if twstock(h)])
+    return dict(date=j["date"], aum=j.get("aum"), holdings=[h for h in hs if twstock(h)])
 
 def capital(fid, date=None):
     j = json.loads(curl("https://www.capitalfund.com.tw/CFWeb/api/etf/buyback", json_body={"fundId": fid, "date": date}))
     if j.get("code") != 200: raise EtfError(f"群益 API 回應 code={j.get('code')}")
     d = j["data"]
     hs = [hold(s["stocNo"], s["stocName"], s["share"], s["weight"]) for s in d.get("stocks", [])]
-    return dict(date=d["pcf"]["date2"], holdings=[h for h in hs if twstock(h)])  # PCF 依前一營業日收盤持股編製，以 date2 為基準日
+    return dict(date=d["pcf"]["date2"], aum=d["pcf"].get("nav"), holdings=[h for h in hs if twstock(h)])  # PCF 依前一營業日收盤持股編製，以 date2 為基準日
 
 def fuhhwa(eid, date):
     d = date.replace("-", "")
@@ -96,12 +96,13 @@ def fuhhwa(eid, date):
     rows = xlsx_rows(b); hs = []
     dd = next((ndate(re.search(r"\d{4}/\d{2}/\d{2}", str(r[0])).group(0)) for r in rows if r[0] and "日期" in str(r[0]) and re.search(r"\d{4}/\d{2}/\d{2}", str(r[0]))), None)
     if dd != date: raise EtfError(f"復華檔案日期 {dd} 與要求 {date} 不符")
-    on = False
-    for r in rows:
+    on = False; aum = None
+    for i, r in enumerate(rows):
+        if r[0] == "基金資產淨值" and i + 1 < len(rows): aum = n(rows[i + 1][0])
         if r[0] == "證券代號": on = True; continue
         if on and r[0] and re.fullmatch(r"\d{4}", str(r[0]).strip()): hs.append(hold(r[0], r[1], n(r[2]), n(r[4])))
     if not hs: raise EtfError("復華檔案找不到持股列（改版？）")
-    return dict(date=dd, holdings=hs)
+    return dict(date=dd, aum=aum, holdings=hs)
 
 def nomura(code, date):
     j = json.loads(curl("https://www.nomurafunds.com.tw/API/ETFAPI/api/Fund/GetFundAssets", json_body={"FundID": code, "SearchDate": date}))
@@ -111,7 +112,7 @@ def nomura(code, date):
     if ndate(fa["NavDate"]) != date: raise EtfError(f"野村資料日 {fa['NavDate']} 與要求 {date} 不符")
     t = next((t for t in e["Data"]["Table"] if t["TableTitle"] == "股票"), None)
     if not t: raise EtfError("野村回應找不到股票表（改版？）")
-    return dict(date=date, holdings=[h for h in (hold(r[0], r[1], n(r[2]), n(r[3])) for r in t["Rows"]) if twstock(h)])
+    return dict(date=date, aum=n(fa.get("Aum")), holdings=[h for h in (hold(r[0], r[1], n(r[2]), n(r[3])) for r in t["Rows"]) if twstock(h)])
 
 def ezmoney(fund, date=None):
     jar = tempfile.mktemp()
@@ -125,7 +126,7 @@ def ezmoney(fund, date=None):
     st = next((x for x in a if x["AssetCode"] == "ST"), None)
     if not st or not st.get("Details"): raise EtfError("統一投信頁面無股票明細")
     d = ndate(st["Details"][0]["TranDate"])
-    return dict(date=d, holdings=[hold(x["DetailCode"], x["DetailName"], x["Share"], x["NavRate"]) for x in st["Details"] if re.fullmatch(r"\d{4}", str(x["DetailCode"]).strip())])
+    return dict(date=d, aum=next((x["Value"] for x in a if x["AssetCode"] == "NAV"), None), holdings=[hold(x["DetailCode"], x["DetailName"], x["Share"], x["NavRate"]) for x in st["Details"] if re.fullmatch(r"\d{4}", str(x["DetailCode"]).strip())])
 
 def fubon(stk, date=None):
     u = f"https://websys.fsit.com.tw/FubonETF/Trade/Assets.aspx?stkId={stk}" + (f"&ddate={date.replace('-', '')}&lan=TW" if date else "")
@@ -143,7 +144,8 @@ def fubon(stk, date=None):
     for r in re.finditer(r'<tr>\s*<td class="tac">(\d{4})</td>\s*<td>([^<]*)</td>\s*<td class="tar">([\d,]+)</td>\s*<td class="tar">[\d,]+</td>\s*<td class="tar">([\d.]+)</td>', t[i:]):
         hs.append(hold(r.group(1), H.unescape(r.group(2)), n(r.group(3)), n(r.group(4))))
     if not hs: raise EtfError("富邦頁面無持股列")
-    return dict(date=d, holdings=hs)
+    am = re.search(r"基金淨資產\(新台幣\)</p>\s*<p>([\d,]+)</p>", t)
+    return dict(date=d, aum=n(am.group(1)) if am else None, holdings=hs)
 
 CATH = "https://cwapi.cathaysite.com.tw/api/ETF/DownloadETFWeightExcel?FundCode={f}&SearchDate={d}"
 def cathay(fund, date):
@@ -188,7 +190,7 @@ NOT_COVERED = "中信投信、永豐投信（官網為前端渲染且無穩定�
 def snaps(code): return sorted(SNAP.glob(f"{code}_*.json"), key=lambda f: f.name)
 def save(code, cur):
     (SNAP / f"{code}_{cur['date']}.json").write_text(json.dumps(cur, ensure_ascii=False, separators=(",", ":")))
-    for f in snaps(code)[:-4]: f.unlink()
+    for f in snaps(code)[:-10]: f.unlink()
 
 def prev_days(d, k=7):
     x = dt.date.fromisoformat(d)
@@ -267,7 +269,7 @@ def main():
                 prevShares=(p["shares"] if p else 0) if pm is not None else None, prevWeight=(p["weight"] if p else 0) if pm is not None else None))
     etf = dict(updated=dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).isoformat(timespec="seconds"), notCovered=NOT_COVERED,
         funds=[dict(code=f["code"], name=f["name"], issuer=f["issuer"], url=f["url"], ok=f["ok"], stale=f["stale"], reason=f["reason"],
-                    date=f["cur"]["date"] if f["cur"] else None, prevDate=f["prev"]["date"] if f["prev"] else None,
+                    date=f["cur"]["date"] if f["cur"] else None, aum=(f["cur"] or {}).get("aum"), active=f["code"].endswith("A"), prevDate=f["prev"]["date"] if f["prev"] else None,
                     n=len(f["cur"]["holdings"]) if f["cur"] else 0) for f in funds], holdings=hold_)
     (OUT / "etf.json").write_text(json.dumps(etf, ensure_ascii=False, separators=(",", ":")))
     okn = sum(f["ok"] for f in funds); stn = sum(f["stale"] for f in funds)

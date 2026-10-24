@@ -216,3 +216,23 @@ html.m .rc-head.sub{margin:18px -14px 12px}
 html.m .card>h3{margin:-14px -14px 12px}
 html.m .charttitle{padding:9px 12px}
 .etfcov{overflow-x:auto;-webkit-overflow-scrolling:touch}.etfcov table{min-width:560px}.etfcov td small{display:block;color:#98a2b3;font-size:10px;margin-top:3px}
+/* ETF 持有清單／ETF 頁／涵蓋範圍 */
+.etfwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:8px 0}
+.etfwrap table.etft{display:table!important;white-space:normal;min-width:700px;width:100%}
+.etfwrap table.cons{min-width:820px}
+.etft th.sk{cursor:pointer;user-select:none;white-space:nowrap}.etft th.sk i{font-style:normal;font-size:10px;color:#b0b9c9;margin-left:3px}.etft th.sk.on{color:#365fd2}.etft th.sk.on i{color:#365fd2}
+.etft td{vertical-align:top}.etft td b.up{color:#d4483b}.etft td b.down{color:#2c9a6f}
+.etft .act{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:9px;background:#efe9ff;color:#6b3fc7;font-size:10px;font-weight:600;vertical-align:middle}
+.etft a.etflink{color:#365fd2;text-decoration:none}.etft a.etflink:hover{text-decoration:underline}
+.etft.cons td:first-child .star{display:inline-block;margin-right:6px;cursor:pointer;color:#b8c1cf;font-size:15px}.etft.cons td:first-child .star.on{color:#f0a020}
+.etft.cons td:first-child a{display:inline-block;vertical-align:top}
+html.m .etfwrap table.etft td:first-child,html.m .etfwrap table.etft th:first-child{position:sticky;left:0;background:#fff;z-index:1;box-shadow:2px 0 0 #eef1f6}
+.tabs #etfAct{margin-left:8px;border:1px solid #d9def0;color:#6b3fc7}.tabs #etfAct.on{background:#efe9ff;border-color:#b9a2f0}
+.etfm{margin:10px 0}.etfm span b.up{color:#d4483b}.etfm span b.down{color:#2c9a6f}
+.tag.hold{background:#edf2ff;color:#365fd2}
+.cov{margin:8px 0}.covrow{display:grid;grid-template-columns:78px 54px 1fr;gap:6px 8px;align-items:start;padding:8px 0;border-top:1px dashed #e4e9f2;font-size:12px}
+.covrow:first-child{border-top:0}.covrow .covn{color:#98a2b3;font-size:11px;padding-top:2px}
+.covrow>div{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-flex;flex-direction:column;padding:3px 8px;border-radius:6px;background:#f4f6fb;border:1px solid #e4e9f2;color:#4a5568;text-decoration:none;font-size:11px;line-height:1.4}
+.chip em{font-style:normal;color:#98a2b3;font-size:10px}.chip.bad{background:#fff4ec;border-color:#f3d6a4}.chip.bad em{color:#b54708}.chip.stale{background:#fff9e8;border-color:#f0dfa0}
+html.m .covrow{grid-template-columns:1fr}html.m .covrow .covn{display:inline}
