@@ -141,15 +141,21 @@ for mk in ("上市", "上櫃"):
 targets = list(dict.fromkeys([c for c in EXTRA + WATCH if c in stocks] + ranked))
 if ONLY: targets = [c for c in ONLY if c in stocks]
 print("history targets", len(targets))
+import adjust, patterns
+_ref = dt.date.fromisoformat(twse_date or tpex_date)
+EVENTS = adjust.events(_ref - dt.timedelta(days=31 * MONTHS), _ref, SLEEP)   # 重大除權（參考價/前收 ≤ 0.9）
+print("major ex-rights in window:", {c: [(e[0], e[1]) for e in v] for c, v in EVENTS.items() if c in targets})
 for i, code in enumerate(targets):
     s = stocks[code]; h = history(s)
     if not h: continue
+    adj = []
+    if code in EVENTS: h, adj = adjust.apply(h, EVENTS[code])   # 除權還原（均線／支撐壓力皆用還原價）
     cl = [x[4] for x in h]; vol = [x[5] or 0 for x in h]
     avg5 = sum(vol[-20:]) / 20 if len(vol) >= 20 else None  # 近 20 日均量（含當日）
     out = dict(code=code, name=s["name"], market=s["market"], src=s["src"], date=h[-1][0], updated=now,
                rows=h, ma5=sma(cl, 5), ma20=sma(cl, 20), ma60=sma(cl, 60),
                volRatio=round(vol[-1] / avg5, 2) if avg5 else None, levels=levels(h, cl[-1]) if len(h) >= 10 else None,
-               method="結構法")
+               method="結構法", adjusted=adj or None, patterns=patterns.detect(h, cl[-1]))
     (HIS / f"{code}.json").write_text(json.dumps(out, ensure_ascii=False))
     s["hasHistory"] = True
     print(i + 1, code, len(h))
@@ -168,3 +174,5 @@ print("done", meta)
 # --- 產業別、三大法人近 20 日（上市+上櫃）、融資、ETF 持股 ---
 import sys; sys.path.insert(0, str(ROOT / "scripts"))
 import chips; chips.main()
+
+import summary; summary.main()   # 自選 25 檔一頁式總覽（site/data/watch25.json）
