@@ -12,7 +12,7 @@ async function init(){
   $('#cTw').innerHTML=META.counts.twse+'<em> 檔</em>';$('#cTp').innerHTML=META.counts.tpex+'<em> 檔</em>';
   $('#dTw').textContent='交易日期 '+dfmt(META.twseDate);$('#dTp').textContent='交易日期 '+dfmt(META.tpexDate);
   $('#nAll').textContent=ALL.length;$('#nEtf').textContent=ALL.filter(x=>x.etf).length;
-  document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav').forEach(x=>x.classList.remove('active'));b.classList.add('active');view=b.dataset.view;render();});
+  document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav').forEach(x=>x.classList.remove('active'));b.classList.add('active');view=b.dataset.view;render();if(view==='w25')overview();});
   document.querySelectorAll('.filters button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.filters button').forEach(x=>x.classList.remove('chosen'));b.classList.add('chosen');mkt=b.dataset.m;render();});
   $('#q').oninput=render;$('#sort').onchange=render;
   render();const h=location.hash.slice(1);pick(ALL.find(x=>x.code===h)?h:'2330');
@@ -25,12 +25,35 @@ function render(){
   if(q)L=L.filter(x=>x.code.toLowerCase().includes(q)||x.name.toLowerCase().includes(q));
   const k=$('#sort').value;const pct=x=>x.change/(x.close-x.change);
   L=[...L].sort(k==='code'?(a,b)=>a.code.localeCompare(b.code):k==='change'?(a,b)=>pct(b)-pct(a):(a,b)=>(b[k]||0)-(a[k]||0));
-  $('#listTitle').textContent={all:'全部股票',watch:'我的自選',etf:'ETF'}[view];$('#listCount').textContent=L.length+' 檔';
+  $('#listTitle').textContent={all:'全部股票',watch:'我的自選',etf:'ETF',w25:'全部股票'}[view];$('#listCount').textContent=L.length+' 檔';
   $('#list').innerHTML=L.slice(0,300).map(x=>`<div class="row ${x.code===sel?'sel':''}" data-c="${x.code}"><span class="star ${w.includes(x.code)?'on':''}" data-s="${x.code}">${w.includes(x.code)?'★':'☆'}</span>
   <div class="nm"><b>${x.name}</b><small>${x.code}<span class="tag">${x.market}${x.etf?' · ETF':''}</span>${x.hasHistory?'':' <span title="尚無月歷史">◦</span>'}</small></div>
   <div class="px"><b>${fmt(x.close)}</b><small class="${cls(x.change)}">${sg(x.change)}${fmt(x.change)} (${sg(x.change)}${fmt(pct(x)*100)}%)</small></div></div>`).join('')||'<div class="empty">沒有符合的股票</div>';
   if(L.length>300)$('#list').insertAdjacentHTML('beforeend','<div class="empty">僅顯示前 300 檔，請用搜尋縮小範圍</div>');
   $('#list').querySelectorAll('.row').forEach(r=>r.onclick=e=>{if(e.target.dataset.s)toggle(e.target.dataset.s);else pick(r.dataset.c);});
+}
+let W25=null;
+async function overview(){
+  const box=$('#detail');box.innerHTML='<div class="empty">正在載入自選 25 檔總覽…</div>';
+  try{W25=W25||await fetch('data/watch25.json').then(r=>r.json());}catch(e){box.innerHTML='<div class="empty">總覽資料載入失敗</div>';return;}
+  if(view!=='w25')return;
+  const I=W25.items,z1=v=>v==null?'—':(v>0?'+':'')+fmt(v,1);const bad=I.filter(i=>i.issues&&i.issues.length);
+  const rowh=i=>{if(!i.close)return `<tr><td colspan="9"><b>${i.name}</b> ${i.code} · ${i.issues.join('、')}</td></tr>`;
+   const s1=i.s1,r1=i.r1,t=i.trend,b=i.box,n=i.inst;
+   return `<tr data-c="${i.code}"><td><b>${i.name}</b><small>${i.code} · ${i.market}</small></td>
+   <td class="num"><b>${fmt(i.close)}</b><small class="${cls(i.change)}">${sg(i.change)}${fmt(i.pct)}%</small></td>
+   <td class="num">${s1?`<b class="down">${fmt(s1.price)}</b><small>${z1(s1.dist)}%${s1.low!==s1.high?` · 帶 ${fmt(s1.low)}–${fmt(s1.high)}`:''}</small>`:'<small>尚未形成</small>'}</td>
+   <td class="num">${r1?`<b class="up">${fmt(r1.price)}</b><small>${z1(r1.dist)}%${r1.low!==r1.high?` · 帶 ${fmt(r1.low)}–${fmt(r1.high)}`:''}</small>`:'<small>尚未形成</small>'}</td>
+   <td class="num">${i.volRatio==null?'—':fmt(i.volRatio)+' 倍'}</td>
+   <td class="num">${n?`<b class="${cls(n.total)}">${z1(n.total).replace(/\.0$/,'')}</b><small>近3日 ${z1(n.sum3).replace(/\.0$/,'')}</small>`:'<small>官方未列入</small>'}</td>
+   <td>${t?`<span class="pill ${t.state==='守住'?'ok':'warn'}">上升趨勢線${t.state}</span>`:''}${b?`<span class="pill">${b.days} 日平台 · ${b.state}</span>`:''}${!t&&!b?'<small>—</small>':''}</td>
+   <td class="num"><small>${i.days||0} 日${i.adjusted?' · 已還原':''}</small></td></tr>`;};
+  box.innerHTML=`<div class="eyebrow">WATCHLIST OVERVIEW <span>Candy 自選 ${I.length} 檔 · 資料日期 ${dfmt(W25.date)}</span></div>
+  <div class="titleprice"><div><h2>自選 ${I.length} 檔總覽</h2><p>點列可看個股頁 · 價位為本站依歷史價格結構自行計算的觀察價位，不是目標價或買賣建議</p></div></div>
+  <div class="tablewrap"><table class="ov"><tr><th>股票</th><th>收盤 / 漲跌</th><th>第一支撐<small>距現價</small></th><th>第一壓力<small>距現價</small></th><th>量比<small>對20日均量</small></th><th>法人買賣超<small>張 · 最新日</small></th><th>形態（觀察用）</th><th>歷史</th></tr>${I.map(rowh).join('')}</table></div>
+  <p class="note2">${bad.length?'資料提醒：'+bad.map(i=>`${i.name}（${i.issues.join('、')}）`).join('；')+'。':'25 檔皆具收盤行情、均線、量比與支撐壓力。'}</p>
+  <p class="note2">法人買賣超＝外資＋投信＋自營商合計（千股換算張），來源證交所 T86／櫃買中心；形態為依歷史價量自動偵測的觀察標示，不預測突破方向。量比＝最新日成交量 ÷ 近 20 日均量。</p>`;
+  box.querySelectorAll('tr[data-c]').forEach(r=>r.onclick=()=>{pick(r.dataset.c);});
 }
 function chart(rows){
   const R=rows.slice(-60),w=760,h=260,vh=60,p=36;const cl=rows.map(r=>r[4]);
@@ -67,9 +90,13 @@ async function pick(code){
   <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>`;
   if(H){html+=`<div class="chartpanel"><div class="charttitle"><b>價格走勢<small>近 ${Math.min(60,H.rows.length)} 個交易日（共 ${H.rows.length} 日）</small></b><span>日線收盤 · 均線 · 成交量</span></div>${chart(H.rows)}
   <div class="ma"><span><i style="background:#f0a020"></i>MA5 <b>${fmt(H.ma5)}</b></span><span><i style="background:#d4483b"></i>MA20 <b>${fmt(H.ma20)}</b></span><span><i style="background:#2c9a6f"></i>MA60 <b>${fmt(H.ma60)}</b></span><span>量比 <b>${vr20(H.rows)}</b></span></div>
-  <div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
+  ${H.adjusted?`<div class="note2 adjnote">⚙ 已除權還原：${H.adjusted.map(a=>`${dfmt(a.date)} 除權（前收 ${fmt(a.prevClose)} → 參考價 ${fmt(a.refPrice)}，還原因子 ${fmt(a.factor,4)}，來源${a.src}）`).join('；')}。除權日以前的價格已乘以還原因子、成交量除以還原因子，均線、量比與支撐壓力皆用還原價；以下顯示的歷史價位與當時實際成交價不同。</div>`:''}<div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
   <div class="sectionlabel"><h3>接下來，看哪裡？</h3><span>價格結構觀察 · 依 ${dfmt(H.date)} 收盤 · 來源 ${s.src}</span></div>`;
   if(L){const cf=confluence(H,L);html+=lvcards(L,cf,close,H)+`<p class="note2 disclaimer">支撐與壓力為本站依歷史價格結構自行計算的觀察價位，可能與其他網站不同，不是目標價或買賣建議。</p>`+(L.limits?`<p class="note2">漲跌停參考（依漲跌幅限制，非結構價位）：明日漲停 ${fmt(L.limits.up)} · 跌停 ${fmt(L.limits.down)}</p>`:'');}
+  const P=H.patterns;if(P&&(P.trend||P.box)){const t=P.trend,b=P.box;html+=`<div class="rcard patt"><div class="rc-head"><h3>形態偵測<small>（觀察用）</small></h3><span>依 ${dfmt(H.date)} 收盤</span></div>
+   ${t?`<div class="sector-line"><span>📈 上升趨勢線（近期低點墊高）</span><b class="${t.state==='守住'?'up':'down'}">${t.state}</b><strong>線約 ${fmt(t.lineToday)}</strong></div><p class="rc-note">近 ${t.sinceDays} 日內最近 3 個波段低點 ${t.points.map(p=>dfmt(p[0]).slice(5)+' '+fmt(p[1])).join(' → ')}，趨勢線每日約 ${t.slopePct>0?'+':''}${fmt(t.slopePct)}%；收盤距趨勢線 ${t.dist>0?'+':''}${fmt(t.dist,1)}%。</p>`:''}
+   ${b?`<div class="sector-line"><span>▭ 整理平台（前 ${b.days} 日區間窄）</span><b>${b.state}</b><strong>${fmt(b.low)}–${fmt(b.high)}</strong></div><p class="rc-note">不含今日的前 ${b.days} 個交易日最高 ${fmt(b.high)}、最低 ${fmt(b.low)}，區間寬度 ${fmt(b.width,1)}%。</p>`:''}
+   <p class="rc-note sep">形態為依歷史價量自動偵測的觀察標示，不是買賣訊號，也不預測突破方向；偵測規則見下方「計算方法與資料說明」。</p></div>`;}
   }else html+=`<div class="card"><h3>價格走勢 / 支撐壓力<span>尚無歷史</span></h3><p class="note2">此股票目前不在每日歷史抓取範圍（主要成交金額前段＋預設清單），因此暫無走勢、均線與支撐壓力（資料不足）。系統每日累積收盤快照，資料足夠後會自動顯示。</p></div>`;
   html+=`<div id="research"><div class="empty">正在彙整產業、法人、融資與 ETF 資料…</div></div>`;
   $('#detail').innerHTML=html;
@@ -135,8 +162,8 @@ function research(s,H,C,E){
    <p class="rc-note">00981A、國泰、富邦及其他尚未列入的 ETF 未接入，不會推定為未持有。群益可回查前期，元大從首次成功收錄開始累積歷史；比較日不一定是前一交易日。股數變化包含申購買回、股票分割與公司行動，不等於經理人主動買賣。權重變化也受股價影響。資料每個交易日由排程自動更新。</p></details></div>`;
   o+=`<details class="method"><summary>計算方法與資料說明</summary>
    <p>支撐壓力不是目標價、不是買賣建議，也不代表適合追價。價位全部來自真實歷史成交結構：近 120 個交易日的波段高低點（前後各 2 日確認）與量能K（成交量 ≥ 前 20 日均量 1.5 倍）的最高、最低價；高點被突破超過 1% 後不再當壓力；支撐被跌破時結構轉弱。相鄰結構落在同一波動容差（1.6%）內合併為同一價格帶，不硬拆兩區；價位皆依台股升降單位取整。支撐：現價下方 0～10% 標示近端、10～20% 標示中期、超過 20% 列為長期結構。支撐候選包含波段低點、缺口邊緣、MA5／MA20、近 20 日高低點與量能K。壓力：第一壓力帶之上的下一個獨立結構，若已超過 +10% 則保留、改標中期壓力。近 10 日高點落在第一壓力帶時，標為「關鍵突破／壓力共振區」。找不到真實結構就顯示「尚未形成」，不以公式補值；「資料不足」表示來源資料不足以計算。創新高時顯示明日漲停參考價（依漲跌幅限制，非結構價位）。</p>
-   <p>量比＝最新日成交量 ÷ 近 20 日均量（含當日）。均線與走勢以歷史資料最後一日為準。未還原價格受除權息、分割影響，相關價位需另行判讀。</p>
-   <p>資料來源：臺灣證券交易所 OpenAPI／網站資料（STOCK_DAY_ALL、STOCK_DAY、T86、MI_MARGN、t187ap03_L）與櫃買中心 OpenAPI／網站資料（每日收盤行情、個股日成交、三大法人、融資融券餘額、mopsfin_t187ap03_O）；ETF 持股取自元大投信、群益投信官網公開持股。法人單位為千股換算張，日期獨立標示。每個交易日 15:00（台北）自動更新。</p>
+   <p>量比＝最新日成交量 ÷ 近 20 日均量（含當日）。均線與走勢以歷史資料最後一日為準。重大除權（官方除權息參考價 ÷ 前收 ≤ 0.9，如股票分割）已依證交所 TWT49U／櫃買中心 exDailyQ 還原，一般現金股息（通常小於 5%）未還原，相關價位需另行判讀。</p><p>形態偵測：①上升趨勢線＝近 60 日內最近 3 個波段低點（前後各 2 日確認）依序墊高且首尾相距 ≥ 15 日，以最小平方法擬合，收盤距線 ≥ -1.5% 為守住、否則為跌破；②整理平台＝不含今日的前 N 日（N=20／15／10）最高最低價區間寬度 ≤ 12%（N=20）或 9%（N≤15），再依今日收盤標示平台內、突破上緣或跌破下緣。皆為觀察用標示，不是買賣訊號。</p>
+   <p>資料來源：臺灣證券交易所 OpenAPI／網站資料（STOCK_DAY_ALL、STOCK_DAY、T86、MI_MARGN、t187ap03_L）與櫃買中心 OpenAPI／網站資料（每日收盤行情、個股日成交、三大法人、融資融券餘額、mopsfin_t187ap03_O）；ETF 持股取自元大投信、群益投信官網公開持股。法人單位為千股換算張，日期獨立標示。每個交易日 22:00（台北）自動更新。</p>
    <p>技術價位是研究參考，不是目標價或買賣指示；不保證價格守住支撐或突破壓力。</p></details>`;
   return o;
 }

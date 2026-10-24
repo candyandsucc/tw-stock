@@ -63,3 +63,15 @@ details summary{cursor:pointer;color:#6b778c;font-size:12px;margin-top:8px}.meth
 .lvrow+.lvrow{border-top:1px dashed #e8ecf3;padding-top:8px}
 .vl{margin:8px 0 0;padding-left:18px;color:#6b778c;font-size:12px;line-height:1.8}
 .disclaimer{color:#7f8ba0}
+/* 自選 25 檔總覽／形態／還原註記 */
+.tablewrap{overflow-x:auto;margin:10px 0}
+table.ov{width:100%;border-collapse:collapse;font-size:13px;min-width:820px}
+table.ov th{font-weight:600;text-align:left;color:#667085;padding:8px 6px;border-bottom:1px solid #e6eaf2;white-space:nowrap}
+table.ov th small,table.ov td small{display:block;font-weight:400;color:#98a2b3;font-size:11px}
+table.ov td{padding:8px 6px;border-bottom:1px solid #f0f2f7;vertical-align:top}
+table.ov td.num{text-align:right}table.ov th:nth-child(n+2):not(:nth-child(7)){text-align:right}
+table.ov tr[data-c]{cursor:pointer}table.ov tr[data-c]:hover{background:#f6f8fe}
+.pill{display:inline-block;font-size:11px;padding:2px 7px;border-radius:10px;background:#eef1f6;color:#475467;margin:0 4px 4px 0}
+.pill.ok{background:#e6f0ff;color:#2a5bd7}.pill.warn{background:#fff1dc;color:#b45f06}
+.adjnote{background:#fff8e6;border-radius:8px;padding:8px 10px;margin:8px 0}
+.patt h3 small{font-weight:400;color:#98a2b3;font-size:12px}
