@@ -2,7 +2,7 @@
 """延伸官方資料：休市日程、處置／注意／全額交割標記、信用交易（融資融券借券）、外資持股比率。
 只用證交所／櫃買中心官方公開資料；每一項獨立 try/except，單項失敗只保留前次資料並印出原因，不影響 daily workflow。
 用法：python3 scripts/extra.py [calendar|flags|credit|all]"""
-import json, re, sys, time, pathlib, datetime as dt, urllib.request
+import json, math, re, sys, time, pathlib, datetime as dt, urllib.request
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "site" / "data"; CACHE = ROOT / "snapshots" / "chips"; HIS = OUT / "history"
 CACHE.mkdir(parents=True, exist_ok=True)
@@ -351,8 +351,145 @@ def gaps():
           sources=dict(twse="https://www.twse.com.tw/zh/exRight/TWT49U.html", tpex="https://www.tpex.org.tw/zh-tw/mainboard/trading/exright/calculation.html")))
     print("gaps ok", {c: [(e["d"], e["pct"], e["kind"]) for e in v["ev"]] for c, v in summary.items()})
 
+
+# ============ 第二批：重大訊息累積、除權息／法說會日程、指標快照 ============
+NEWS = ROOT / "snapshots" / "news"
+def _roc_cn(s):   # 115年11月06日 -> 2026-11-06
+    m = re.match(r"\s*(\d+)年(\d+)月(\d+)日", str(s or ""))
+    return f"{int(m[1]) + 1911}-{int(m[2]):02d}-{int(m[3]):02d}" if m else None
+def _clean(t, n=None):
+    t = re.sub(r"<[^>]+>", "", str(t or "")).replace("\r", "").strip()
+    t = re.sub(r"\n+", " ", t)
+    return t[:n] if n else t
+
+def news_fetch():
+    """證交所 t187ap04_L、櫃買 mopsfin_t187ap04_O（公開資訊觀測站每日重大訊息；OpenAPI 只給當日）→ 逐日存檔 snapshots/news/，保留 45 天。"""
+    NEWS.mkdir(parents=True, exist_ok=True)
+    out = []
+    a = get("https://openapi.twse.com.tw/v1/opendata/t187ap04_L"); b = get("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O")
+    if a is None and b is None: raise RuntimeError("重大訊息兩來源皆取不到")
+    for r in a or []:
+        out.append(dict(c=str(r.get("公司代號", "")).strip(), n=r.get("公司名稱", "").strip(), mk="上市", d=roc8(r.get("發言日期")), t=str(r.get("發言時間", "")).zfill(6),
+                        s=_clean(r.get("主旨 ") or r.get("主旨"), 160), k=_clean(r.get("符合條款"), 12), f=roc8(r.get("事實發生日")) if r.get("事實發生日") else None, x=_clean(r.get("說明"), 700)))
+    for r in b or []:
+        out.append(dict(c=str(r.get("SecuritiesCompanyCode", "")).strip(), n=r.get("CompanyName", "").strip(), mk="上櫃", d=roc8(r.get("發言日期")), t=str(r.get("發言時間", "")).zfill(6),
+                        s=_clean(r.get("主旨"), 160), k=_clean(r.get("符合條款"), 12), f=roc8(r.get("事實發生日")) if r.get("事實發生日") else None, x=_clean(r.get("說明"), 700)))
+    by = {}
+    for x in out:
+        if x["d"] and x["c"]: by.setdefault(x["d"], []).append(x)
+    for d, v in by.items():     # 以「發言日期」分檔；同一天重跑會合併去重
+        f = NEWS / f"{d}.json"; old = []
+        if f.exists():
+            try: old = json.loads(f.read_text())
+            except Exception: pass
+        key = lambda x: (x["c"], x["t"], x["s"])
+        seen = {key(x): x for x in old}
+        for x in v: seen[key(x)] = x
+        f.write_text(json.dumps(sorted(seen.values(), key=lambda x: (x["d"], x["t"])), ensure_ascii=False, separators=(",", ":")))
+    cut = (now().date() - dt.timedelta(days=45)).isoformat()
+    for f in NEWS.glob("*.json"):
+        if f.stem < cut: f.unlink()
+    return len(out)
+
+def _news_all():
+    items = []
+    for f in sorted(NEWS.glob("*.json")):
+        try: items += json.loads(f.read_text())
+        except Exception: pass
+    return items
+
+def events():
+    """日程：除權息（證交所 TWT48U 預告表、櫃買 tpex_exright_prepost）＋ 法說會（由公開資訊觀測站重大訊息「召開法人說明會」累積，取不到 MOPS 法說會一覽表）＋ 財報法定申報期限。輸出 events.json、news.json。"""
+    old = {}
+    try: old = json.loads((OUT / "events.json").read_text())
+    except Exception: pass
+    errs = {}
+    try: nn = news_fetch(); print("news fetched", nn)
+    except Exception as e: errs["news"] = str(e); print("news fail", e)
+    today = now().date(); a = (today - dt.timedelta(days=5)); b = today + dt.timedelta(days=120)
+    ex = []; okx = False
+    j = get(f"https://www.twse.com.tw/rwd/zh/exRight/TWT48U?response=json&strDate={a:%Y%m%d}&endDate={b:%Y%m%d}", tries=2)
+    if j and j.get("stat") == "OK":
+        okx = True
+        for r in j["data"]:
+            d = _roc_cn(r[0])
+            if not d: continue
+            cash = num(r[7]) if re.match(r"^[\d.]+$", str(r[7]).strip()) else None
+            ex.append(dict(d=d, c=r[1].strip(), n=r[2].strip(), mk="上市", k={"息": "除息", "權": "除權"}.get(r[3].strip(), r[3].strip()), cash=cash, stock=num(r[4]), ref=None,
+                           note=_clean(r[7]) if cash is None else None))
+    time.sleep(SLEEP)
+    j = get("https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost", tries=2)
+    if j:
+        okx = True
+        for r in j:
+            d = roc8(r.get("ExRrightsExDividendDate"))
+            if not d or d < a.isoformat() or d > b.isoformat(): continue
+            ex.append(dict(d=d, c=str(r["SecuritiesCompanyCode"]).strip(), n=r["CompanyName"].strip(), mk="上櫃", k=r["ExRrightsExDividend"].strip(), cash=num(r.get("CashDividend")), stock=num(r.get("StockDividendRatio")), ref=None, note=None))
+    if not okx: ex = old.get("ex", []); errs["ex"] = "除權息來源取不到，保留前次"
+    ex.sort(key=lambda x: (x["d"], x["c"]))
+    # 法說會
+    ir = []
+    for x in _news_all():
+        if not (("法人說明會" in x["s"]) or ("法說會" in x["s"])): continue
+        m = re.search(r"召開法人說明會之日期：\s*(\d+)/(\d+)/(\d+)", x["x"]) or re.search(r"(?:日期|事實發生日)[:：]\s*(\d{3})/(\d{2})/(\d{2})", x["x"])
+        d = f"{int(m[1]) + 1911}-{int(m[2]):02d}-{int(m[3]):02d}" if m else x.get("f")
+        if not d: continue
+        tm = re.search(r"時間：\s*(\d+)\s*時\s*(\d+)?", x["x"]); pl = re.search(r"地點：\s*([^\d][^4]{0,60}?)(?:\s*4\.|$)", x["x"])
+        ir.append(dict(d=d, tm=f"{int(tm[1]):02d}:{int(tm[2] or 0):02d}" if tm else None, c=x["c"], n=x["n"], mk=x["mk"], s=x["s"], ann=x["d"], pl=pl[1].strip()[:60] if pl else None))
+    ir = list({(i["c"], i["d"], i["s"]): i for i in ir}.values()); ir.sort(key=lambda i: (i["d"], i["c"]))
+    # 財報法定申報期限（規則推算：證券交易法第 36 條；一般產業公司；非個別公司公告日）
+    fin = []
+    for y in (today.year - 1, today.year, today.year + 1):
+        for md, lab in (("03-31", f"{y - 1} 年度財報（年報）"), ("05-15", f"{y} 第一季財報"), ("08-14", f"{y} 第二季財報"), ("11-14", f"{y} 第三季財報")):
+            d = f"{y}-{md}"
+            if a.isoformat() <= d <= b.isoformat(): fin.append(dict(d=d, t=lab + "申報期限（一般產業）"))
+    wjson("events.json", dict(ex=ex, ir=ir, fin=fin, asof=today.isoformat(), errors=errs, updated=now().isoformat(timespec="seconds"),
+          sources=dict(ex="https://www.twse.com.tw/zh/exRight/TWT48U.html；https://www.tpex.org.tw/openapi/v1/tpex_exright_prepost", ir="公開資訊觀測站重大訊息（證交所 t187ap04_L、櫃買 mopsfin_t187ap04_O，第 12 款召開法人說明會）", fin="證券交易法第 36 條（法定申報期限）"),
+          irNote="MOPS 法人說明會一覽表網頁拒絕程式存取，未繞過；法說會日程改由每日重大訊息累積，只含站台開始存檔（見 irSince）之後公告者。", irSince=min((p.stem for p in NEWS.glob('*.json')), default=None)))
+    # 個股重大訊息（近 30 天，新到舊）
+    cut = (today - dt.timedelta(days=30)).isoformat(); nw = {}
+    for x in _news_all():
+        if x["d"] and x["d"] >= cut: nw.setdefault(x["c"], []).append([x["d"], x["t"], x["s"], x["k"], x["f"], x["x"][:300]])
+    for c in nw: nw[c].sort(key=lambda r: (r[0], r[1]), reverse=True)
+    if nw or not (OUT / "news.json").exists():
+        wjson("news.json", dict(items=nw, asof=today.isoformat(), days=sorted({p.stem for p in NEWS.glob('*.json')}), updated=now().isoformat(timespec="seconds"),
+              fields=["發言日期", "發言時間", "主旨", "符合條款", "事實發生日", "說明摘要"], sources=dict(twse="https://openapi.twse.com.tw/v1/opendata/t187ap04_L", tpex="https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap04_O")))
+    print("events ok ex", len(ex), "ir", len(ir), "news codes", len(nw), errs)
+
+def _tk(p): return 0.01 if p < 10 else 0.05 if p < 50 else 0.1 if p < 100 else 0.5 if p < 500 else 1 if p < 1000 else 5
+def metrics():
+    """由歷史價量算出每檔的篩選／族群用指標（站內資料，不連網）→ metrics.json。"""
+    st = {s["code"]: s for s in json.loads((OUT / "stocks.json").read_text())["stocks"]}
+    items = {}; latest = None
+    for f in sorted(HIS.glob("*.json")):
+        try: h = json.loads(f.read_text())
+        except Exception: continue
+        s = st.get(h["code"])
+        if not s or h["date"] != s["date"]: continue
+        r = h["rows"]; n = len(r); cl = [x[4] for x in r]; c = cl[-1]
+        if n < 6: continue
+        g = h.get("gaps") or {}; start = next((i for i in range(n) if r[i][0] == g["since"]), 0) if g.get("suspect") else 0
+        ret = lambda k: round((c / cl[-1 - k] - 1) * 100, 2) if n > k and n - 1 - k >= start else None
+        L = h.get("levels") or {}; s1 = (L.get("support") or [None])[0]; r1 = (L.get("resistance") or [None])[0]
+        ds = round((c / s1["high"] - 1) * 100, 2) if s1 else None
+        rr = None
+        if s1 and r1:
+            stop = math.floor(s1["low"] * 0.99 / _tk(s1["low"] * 0.99) + 1e-9) * _tk(s1["low"] * 0.99)
+            if c > stop and r1["low"] > c: rr = round((r1["low"] - c) / (c - stop), 2)
+        m5, m20, m60 = h.get("ma5"), h.get("ma20"), h.get("ma60")
+        hi = lambda k: max(x[2] for x in r[-1 - k:-1]) if n > k and n - 1 - k >= start else None
+        h10, h20 = hi(10), hi(20)
+        items[h["code"]] = [c, ret(5), ret(20), ds, rr, round((c / m20 - 1) * 100, 2) if m20 else None, h.get("volRatio"), 1 if c > r[-1][1] else 0,
+                            None if h10 is None else int(c > h10), None if h20 is None else int(c > h20),
+                            None if not m5 else int(c > m5), None if not m20 else int(c > m20), None if not m60 else int(c > m60),
+                            None if not (m5 and m20 and m60) else int(m5 > m20 > m60), None if not s1 else int(c >= s1["low"])]
+        latest = h["date"]
+    wjson("metrics.json", dict(date=latest, n=len(items), fields=["close", "r5", "r20", "distSupport", "rr", "bias20", "volRatio", "red", "brk10", "brk20", "aboveMA5", "aboveMA20", "aboveMA60", "bull", "supHold"],
+          items=items, note="distSupport＝收盤÷第一支撐帶上緣−1（%，負值＝已在帶內或跌破）；rr＝(第一壓力下緣−收盤)÷(收盤−停損)，停損＝第一支撐帶下緣×0.99；brk＝收盤高於前 10／20 日最高價；皆由站內歷史價量計算，非買賣建議"))
+    print("metrics ok", len(items))
+
 def main(which="all"):
-    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps)
+    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, events=events, metrics=metrics)
     for k, fn in steps.items():
         if which in ("all", k):
             try: fn()

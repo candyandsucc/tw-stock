@@ -325,3 +325,18 @@ html.m #detail .chartpanel{padding:14px}
 /* 走勢圖卡片底部備註（除權還原／價格異常／資料不足；有內容才出現） */
 .cnotes{margin:10px 0 0}.cnote{background:#fff8e6;border-radius:6px;padding:6px 10px;margin:6px 0;font-size:11.5px;line-height:1.65;color:#6b5a2a}
 .cnote.bad{background:#fdecea;color:#8a2a22}.cnote b{font-weight:700}.cnote-s{font-size:10.5px;color:#98a2b3;margin:4px 0 0;line-height:1.6}
+
+/* 第二批：題材、日曆、ETF 彙總、進階篩選 */
+table.ov.themes tr[data-th]{cursor:pointer}table.ov.themes tr.sel{background:#eef3ff}table.ov tr.clk{cursor:pointer}table.ov tr.clk:hover{background:#f6f8fe}
+th.sk{cursor:pointer}th.sk i{font-style:normal;color:#98a2b3;margin-left:3px;font-size:10px}th.sk.on i{color:#365fd2}
+.thm .pill{text-decoration:none;margin:0 3px 3px 0;display:inline-block}
+.calchips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}.calchips button{padding:5px 12px;border-radius:6px;font-size:12px;color:#6b778c;border:1px solid #d9e0ee;background:#fff}.calchips button.on{background:#edf2ff;color:#365fd2;border-color:#4871db}.sepv{width:1px;height:20px;background:#e1e6f0;margin:0 4px}
+.calday.past{opacity:.6}.calday.today{border-color:#4871db}
+.calrow{display:flex;gap:10px;padding:8px 0;border-top:1px solid #f0f2f7;align-items:flex-start}.calrow:first-of-type{border-top:0}.calrow[data-pickc]{cursor:pointer}.calrow>div{min-width:0}.calrow small{display:block;color:#7f8ba0;font-size:11.5px;line-height:1.5;word-break:break-word}.calrow b small{display:inline;margin-left:4px}
+.cb{flex:none;font-size:11px;padding:2px 8px;border-radius:4px;margin-top:2px;background:#eef2f8;color:#46546f}.cb.ex{background:#e6f6ee;color:#16794a}.cb.ir{background:#edf2ff;color:#365fd2}.cb.fin{background:#fff3d6;color:#8a5a00}
+.fl.w{background:#fff3d6;color:#8a5a00;border-color:#f0d9a0}.fl.t{background:#edf2ff;color:#365fd2;border-color:#c9d6f5}
+.evl li{background:#f4f7fd}
+.aggbox{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin:8px 0 6px;padding:10px 12px;background:#f4f7fd;border-radius:8px}.aggbox b{display:block;font-size:18px;margin:3px 0}.aggbox small{display:block;color:#7f8ba0;font-size:11px}
+.advd{margin:8px 0}.advg{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin:10px 0}.advg label{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:#6b778c}.advg select{padding:5px 6px;border:1px solid #d9e0ee;border-radius:6px;font-size:12px;background:#fff}.advg .cbx{display:flex;align-items:center;gap:5px;font-size:11.5px;margin-top:4px;color:#46546f}
+.advn{color:#365fd2!important;font-weight:600}.clr{border:1px solid #d9e0ee;background:#fff;border-radius:6px;font-size:11px;padding:2px 8px;margin-left:6px;cursor:pointer}
+html.m .advg{grid-template-columns:1fr 1fr}

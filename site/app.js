@@ -24,11 +24,12 @@ async function init(){
   fetch('data/calendar.json').then(r=>r.json()).then(c=>{CAL=c;dateBar();if(sel)render();}).catch(()=>{dateBar();});
   if(SC){const c=$('#covN');if(c)c.textContent='技術分析目前涵蓋 '+SC.meta.n+' 檔（資料日期 '+dfmt(SC.meta.date)+'）';}
   scrUI();dateBar();xfUI();
+  ['themes','metrics','events','news'].forEach((n,i)=>fetch('data/'+n+'.json').then(r=>r.json()).then(v=>{[v=>TH=v,v=>MT=v,v=>EV=v,v=>NW=v][i](v);if(n==='metrics'||n==='themes'){advUI();render();}if(sel&&(n==='events'))pick(sel);}).catch(()=>{}));
   $('#upd').textContent=META.updated.replace('T',' ').slice(0,16)+' (台北)';
   $('#cTw').innerHTML=META.counts.twse+'<em> 檔</em>';$('#cTp').innerHTML=META.counts.tpex+'<em> 檔</em>';
   $('#dTw').textContent='交易日期 '+dfmt(META.twseDate);$('#dTp').textContent='交易日期 '+dfmt(META.tpexDate);
   $('#nAll').textContent=ALL.length;$('#nEtf').textContent=ALL.filter(x=>x.etf).length;
-  document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav').forEach(x=>x.classList.remove('active'));b.classList.add('active');view=b.dataset.view;$('#side').classList.remove('open');render();if(view==='w25'){overview();toDetail();}});
+  document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>setView(b.dataset.view));
   document.querySelectorAll('.filters button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.filters button').forEach(x=>x.classList.remove('chosen'));b.classList.add('chosen');mkt=b.dataset.m;render();});
   $('#q').oninput=render;$('#sort').onchange=render;
   loadEF().then(e=>{ETFSET=new Set(e.funds.filter(f=>f.date).map(f=>f.code));render();}).catch(()=>{});
@@ -41,11 +42,12 @@ function render(){
   if(mkt==='ETF')L=L.filter(x=>x.etf);else if(mkt)L=L.filter(x=>x.market===mkt);
   if(q)L=L.filter(x=>x.code.toLowerCase().includes(q)||x.name.toLowerCase().includes(q));
   if(XF)L=L.filter(xfPass);
+  if(advOn())L=L.filter(advPass);
   if(SC&&(scF||tierF>=0))L=L.filter(x=>{const a=SC.items[x.code];return a&&(!scF||a.scen.includes(scF))&&(tierF<0||a.tier===tierF);});
   const k=$('#sort').value;const pct=x=>x.change/(x.close-x.change);
   const SK=SORTS[k];
   L=[...L].sort(SK?(a,b)=>{const fa=SK.f(a),fb=SK.f(b);return (fb==null?-Infinity:fb)-(fa==null?-Infinity:fa)||(b.value||0)-(a.value||0);}:k==='code'?(a,b)=>a.code.localeCompare(b.code):k==='change'?(a,b)=>pct(b)-pct(a):(a,b)=>(b[k]||0)-(a[k]||0));
-  $('#listTitle').textContent={all:'全部股票',watch:'我的自選',etf:'ETF',w25:'全部股票'}[view];$('#listCount').textContent=L.length+' 檔';if(SC)scrStatus(L.length);
+  $('#listTitle').textContent=({all:'全部股票',watch:'我的自選',etf:'ETF',w25:'全部股票'})[view]||'全部股票';$('#listCount').textContent=L.length+' 檔';if(SC)scrStatus(L.length);advUI(L.length);
   const ld=$('#listdate');if(ld)ld.innerHTML=`資料日期 上市 ${dfmt(META.twseDate)} · 上櫃 ${dfmt(META.tpexDate)}${META.twseDate!==META.tpexDate?' <span class="stalechip">兩市場資料日不同</span>':''}`;
   $('#list').innerHTML=L.slice(0,300).map(x=>`<div class="row ${x.code===sel?'sel':''}" data-c="${x.code}"><span class="star ${w.includes(x.code)?'on':''}" data-s="${x.code}">${w.includes(x.code)?'★':'☆'}</span>
   <div class="nm"><b>${x.name}</b><small>${x.code}<span class="tag">${x.market}${x.etf?' · ETF':''}</span>${ETFSET.has(x.code)?'<span class="tag hold">持股明細</span>':''}${flHtml(x.code)}${dtTags(x)}${SC&&SC.items[x.code]?` <span class="tier t${SC.items[x.code].tier}">${TIERS[SC.items[x.code].tier]}</span>`:(x.hasHistory?'':' <span title="尚無月歷史">◦</span>')}</small></div>
@@ -386,7 +388,7 @@ async function pick(code){
   <div class="titleprice"><div><h2>${s.name} <button class="star" style="font-size:18px;color:${W().includes(code)?'#f0a020':'#b8c1cf'}" onclick="toggle('${code}');pick('${code}')">${W().includes(code)?'★':'☆'}</button></h2><p>資料日期 ${dfmt(s.date)}${META&&s.date!==(s.market==='上市'?META.twseDate:META.tpexDate)?'<span class="stalechip">此股資料日早於市場最新日</span>':''} · 來源：${s.src}</p></div>
   <div><strong>${fmt(close)}</strong><span class="${cls(s.change)}">${sg(s.change)}${fmt(s.change)} (${sg(s.change)}${fmt(s.change/(close-s.change)*100)}%)</span></div></div>
   <div class="metrics"><span>開盤<b>${fmt(s.open)}</b></span><span>最高<b>${fmt(s.high)}</b></span><span>最低<b>${fmt(s.low)}</b></span><span>成交量<b>${fmt(s.volume/1000,0)} 張</b></span><span>成交金額<b>${fmt(s.value/1e8)} 億</b></span></div>
-  <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${flagCard(s)}<div id="sl-verdict"></div>${grp('走勢圖','日線收盤、均線、成交量')}`;
+  <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${flagCard(s)}${evCard(s.code)}<div id="sl-verdict"></div>${grp('走勢圖','日線收盤、均線、成交量')}`;
   if(H){html+=`<div class="chartpanel"><div id="ctop">${chartTop(H)}</div>
   ${chartNotes(H)}<div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
   ${grp('價位怎麼看','支撐、壓力與位階在哪（觀察價位，非買賣建議）· 依 '+dfmt(H.date)+' 收盤')}`;
@@ -433,7 +435,7 @@ function research(s,H,C,E){
   o+=fundHtml(s,H);
   o+=`<div class="rcard"><div class="rc-head"><h3>產業熱度</h3><span>依官方產業分類</span></div>${indName?`<div class="sector-line"><span>${indName}</span><b>第 ${rk} / ${ranks.length}</b><strong>${fmt(agg[s.ind].v/1e8)} 億</strong></div>
    <p class="rc-note">${dfmt(s.date)} 同日已取得行情，分類內 ${agg[s.ind].n} 檔。排名依${s.market}成交金額，不代表資金淨流入。來源：${s.market==='上市'?'證交所 t187ap03_L':'櫃買中心 mopsfin_t187ap03_O'}（產業別）＋ 每日收盤行情。</p>`:`<p class="rc-note">官方資料未提供此證券的產業別（ETF 等不列入公司基本資料）。</p>`}
-   <p class="rc-note sep">題材資金流（如 GaN）：尚無可驗證的題材名單及計算來源。</p></div>`;
+   ${themeCard(s.code)||'<p class="rc-note sep">此股票未歸入站內題材清單（題材為站內人工整理，非官方分類）。</p>'}</div>`;
   P.fund=o;o='';
   // 位置（已與上方支撐壓力合併，這裡只保留變數）
   // 法人 20 日
@@ -450,7 +452,7 @@ function research(s,H,C,E){
   else o+=`<p class="rc-note">官方資料未提供此股票的三大法人買賣超（${s.market==='上市'?'證交所 T86':'櫃買中心'}未列入）。</p>`;o+='</div>';
   P.inst=o;o='';
   P.credit=creditCard(s);
-  P.etfh=s.etf&&fundOf(E,s.code)?'':etfHolders(s,E);
+  P.etfh=s.etf&&fundOf(E,s.code)?'':etfHolders(s,E,C);
   P.etfc=etfCoverage(E);
   o+=`<details class="method"><summary>查看計算方法與資料說明</summary>
    <p>支撐壓力不是目標價、不是買賣建議，也不代表適合追價。價位全部來自真實歷史成交結構：近 120 個交易日的波段高低點（前後各 2 日確認）與量能K（成交量 ≥ 前 20 日均量 1.5 倍）的最高、最低價；高點被突破超過 1% 後不再當壓力；支撐被跌破時結構轉弱。相鄰結構落在同一波動容差（1.6%）內合併為同一價格帶，不硬拆兩區；價位皆依台股升降單位取整。支撐：現價下方 0～10% 標示近端、10～20% 標示中期、超過 20% 列為長期結構。支撐候選包含波段低點、缺口邊緣、MA5／MA20、近 20 日高低點與量能K。壓力：第一壓力帶之上的下一個獨立結構，若已超過 +10% 則保留、改標中期壓力。近 10 日高點落在第一壓力帶時，標為「關鍵突破／壓力共振區」。找不到真實結構就顯示「尚未形成」，不以公式補值；「資料不足」表示來源資料不足以計算。創新高時顯示明日漲停參考價（依漲跌幅限制，非結構價位）。</p>
@@ -471,7 +473,7 @@ const stOf=(sh,ps)=>ps==null?'首次收錄，待下一期':!ps&&sh?'新進':!sh?
 const dCell=(sh,ps)=>{if(ps==null)return `<span class="flat">—</span><small>首次收錄，待下一期</small>`;const d=sh-ps,st=stOf(sh,ps);
   return `<b class="${cls(d)}">${lotD(d)}</b><small>${st}${ps>0&&d?` · ${sg(d)}${fmt(d/ps*100,2)}%`:''}</small>`;};
 const sortTh=(lab,k,S)=>`<th class="sk ${S.k===k?'on':''}" data-sk="${k}" tabindex="0" role="button" title="點擊以此欄排序">${lab}<i>${S.k===k?(S.d<0?'▼':'▲'):'↕'}</i></th>`;
-function etfHolders(s,E){
+function etfHolders(s,E,C){
   const F=E.funds,fm=Object.fromEntries(F.map(f=>[f.code,f]));
   const all=(E.holdings[s.code]||[]).map(h=>{const f=fm[h.fund];const d=h.prevShares==null?null:h.shares-h.prevShares;
     return {...h,f,d,amt:f&&f.aum?f.aum*h.weight/100:null};});
@@ -481,6 +483,7 @@ function etfHolders(s,E){
   R=[...R].sort((x,y)=>(key(y)-key(x))*(-etfSort.d)||y.weight-x.weight);
   const total=held.reduce((a,r)=>a+(r.amt||0),0),noAum=held.filter(r=>r.amt==null).length;
   return `<div class="rcard"><div class="rc-head"><h3>持有此股票的 ETF</h3><span>被 ${held.length} 檔 ETF 持有 · 其中主動式 ${act.length} 檔</span></div>
+   ${etfAggLine(s,E,C)}
    <p class="rc-note">已接入 ${new Set(F.filter(f=>f.date).map(f=>f.issuer)).size} 家投信、${F.filter(f=>f.date).length} 檔 ETF 的官方持股，比對前一個揭露日的股數增減（漲紅跌綠）。${held.length?`本股在這些 ETF 的估算持有金額合計約 ${aumFmt(total)}${noAum?`（另有 ${noAum} 檔缺規模未計入）`:''}。`:''}沒接入的 ETF 無法判定，不代表沒持有。</p>
    <div class="tabs">${['全部','增加','減少'].map(t=>`<button data-t="${t}" class="${t===etfTab?'on':''}">${t}</button>`).join('')}<button id="etfAct" class="${etfAct?'on':''}" aria-pressed="${etfAct}">只看主動式 ETF</button><span>顯示 ${R.length} / ${all.length} 筆</span></div>
    ${R.length?`<div class="etfwrap"><table class="etft"><tr><th>ETF / 投信 / 基準日</th>${sortTh('權重','w',etfSort)}${sortTh('持有張數','s',etfSort)}${sortTh('估算金額','a',etfSort)}${sortTh('增減張數 / 增減幅','d',etfSort)}</tr>${R.map(r=>`<tr><td><a href="#${r.fund}" class="etflink" data-go="${r.fund}">${r.fund} ${r.f.name}</a>${r.f.active?'<span class="act">主動式</span>':''}<small>${r.f.issuer} · 基準日 ${r.f.date}${r.f.prevDate?' · 比較 '+r.f.prevDate:''}${r.f.stale?' · <b class="warn">沿用舊資料</b>':''} · <a href="${r.f.url}" target="_blank" rel="noreferrer">官網 ↗</a></small></td>
@@ -632,3 +635,144 @@ function upgradeDetails(root){
 new MutationObserver(()=>upgradeDetails()).observe(document.body,{childList:true,subtree:true});
 upgradeDetails();
 init();
+
+/* ================= 第二批（段一）：題材族群、族群強弱、日程日曆、ETF 增減彙總、進階篩選 ================= */
+let TH=null,MT=null,EV=null,NW=null,TS={k:'r5',d:-1},THSEL=null,CALF={who:'all',type:'all'},EAGG={dir:'up',act:false,min:1};
+const BYC=()=>BYC._m||(BYC._m=Object.fromEntries(ALL.map(x=>[x.code,x])));
+const pcOf=x=>x&&x.close!=null&&x.change!=null&&x.close-x.change?x.change/(x.close-x.change)*100:null;
+const mtOf=c=>MT&&MT.items[c]; const MF=k=>MT?MT.fields.indexOf(k):-1;
+const mv=(c,k)=>{const o=mtOf(c);return o?o[MF(k)]:null;};
+const zp=(v,d=2)=>v==null?'—':(v>0?'+':v<0?'−':'')+fmt(Math.abs(v),d)+'%';
+const csi=(c,k)=>{const o=CS&&CS.items[c];return o&&o.i?o.i[k]:null;};
+const inst5=c=>{const i=CS&&CS.items[c]&&CS.items[c].i;return i?i[3]+i[5]+i[7]:null;};
+const themesOf=c=>TH?TH.themes.filter(t=>t.codes.includes(c)):[];
+const themeSet=()=>themeSet._s||(themeSet._s=new Set(TH?TH.themes.flatMap(t=>t.codes):[]));
+function setView(v){document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===v));view=v;$('#side').classList.remove('open');render();runView();}
+function runView(){const f={w25:overview,theme:themePage,cal:calPage,etfagg:etfAggPage}[view];if(f){f();toDetail();}}
+document.addEventListener('click',e=>{const a=e.target.closest('[data-theme]');if(a){e.preventDefault();THSEL=a.dataset.theme;setView('theme');}
+  const g=e.target.closest('[data-pickc]');if(g){e.preventDefault();pick(g.dataset.pickc);toDetail();}});
+const srcNote=t=>`<p class="note2">${t}</p>`;
+const stkTxt=c=>{const v=csi(c,0),t=csi(c,1);return `${v?`外資${v>0?'買':'賣'}${Math.abs(v)}日`:''}${v&&t?' · ':''}${t?`投信${t>0?'買':'賣'}${Math.abs(t)}日`:''}`||'—';};
+
+/* ---- 題材族群與強弱 ---- */
+function themeAgg(t){const rows=t.codes.map(c=>BYC()[c]).filter(Boolean).map(x=>({x,p:pcOf(x),r5:mv(x.code,'r5'),r20:mv(x.code,'r20'),f5:csi(x.code,3),i5:inst5(x.code)}));
+  const avg=k=>{const a=rows.map(r=>r[k]).filter(v=>v!=null);return a.length?{v:a.reduce((p,q)=>p+q,0)/a.length,n:a.length}:{v:null,n:0};};
+  const sum=k=>{const a=rows.map(r=>r[k]).filter(v=>v!=null);return a.length?{v:a.reduce((p,q)=>p+q,0),n:a.length}:{v:null,n:0};};
+  const val=rows.reduce((p,r)=>p+(r.x.value||0),0),tot=ALL.reduce((p,x)=>p+(x.value||0),0);
+  return {t,rows,avg:avg('p'),r5:avg('r5'),r20:avg('r20'),f5:sum('f5'),i5:sum('i5'),val,share:tot?val/tot*100:null,up:rows.filter(r=>r.p>0).length,dn:rows.filter(r=>r.p<0).length};}
+function themePage(){
+  const box=$('#detail');if(!TH){box.innerHTML='<div class="empty">題材資料載入失敗。</div>';return;}
+  const A=TH.themes.map(themeAgg),K={avg:a=>a.avg.v,r5:a=>a.r5.v,r20:a=>a.r20.v,val:a=>a.val,share:a=>a.share,f5:a=>a.f5.v,i5:a=>a.i5.v,up:a=>a.up/(a.rows.length||1)};
+  A.sort((a,b)=>((K[TS.k](b)==null?-Infinity:K[TS.k](b))-(K[TS.k](a)==null?-Infinity:K[TS.k](a)))*(-TS.d));
+  if(!THSEL||!A.find(a=>a.t.id===THSEL))THSEL=A[0].t.id;
+  const th=(lab,k,sub)=>`<th class="sk ${TS.k===k?'on':''}" data-tk="${k}" tabindex="0" role="button" title="點擊以此欄排序">${lab}<i>${TS.k===k?(TS.d<0?'▼':'▲'):'↕'}</i>${sub?`<small>${sub}</small>`:''}</th>`;
+  const cell=(o,d=2)=>o.v==null?'<td class="num"><small>資料不足</small></td>':`<td class="num"><b class="${cls(o.v)}">${zp(o.v,d)}</b><small>${o.n} 檔平均</small></td>`;
+  const sel=A.find(a=>a.t.id===THSEL),M=sel.rows.slice().sort((a,b)=>(b.x.value||0)-(a.x.value||0));
+  box.innerHTML=`<div class="eyebrow">THEMES <span>站內整理 · 價量資料日 ${dfmt(META.twseDate)}</span></div>
+  ${grp('族群強弱排行','各題材平均漲跌、5／20 日表現、成交占比與法人買賣超')}
+  <div class="rcard"><div class="rc-head"><h3>題材強弱（點欄位標題排序）</h3><span>${TH.themes.length} 個題材</span></div>
+  <div class="tablewrap"><table class="ov themes"><tr><th>題材</th>${th('今日平均','avg')}${th('5 日平均','r5')}${th('20 日平均','r20')}${th('成交值','val','億元')}${th('占全市場','share','成交值%')}${th('外資 5 日','f5','張')}${th('法人 5 日','i5','張 三大合計')}${th('上漲家數','up','')}</tr>
+  ${A.map(a=>`<tr data-th="${a.t.id}" class="${a.t.id===THSEL?'sel':''}"><td><b>${a.t.name}</b><small>${a.rows.length} 檔</small></td>${cell(a.avg)}${cell(a.r5)}${cell(a.r20)}<td class="num"><b>${fmt(a.val/1e8,1)}</b></td><td class="num">${a.share==null?'—':fmt(a.share,1)+'%'}</td>
+   <td class="num">${a.f5.v==null?'<small>資料不足</small>':`<b class="${cls(a.f5.v)}">${sgn(a.f5.v)}</b><small>${a.f5.n} 檔</small>`}</td><td class="num">${a.i5.v==null?'<small>資料不足</small>':`<b class="${cls(a.i5.v)}">${sgn(a.i5.v)}</b><small>${a.i5.n} 檔</small>`}</td><td class="num"><b class="up">${a.up}</b> / <b class="down">${a.dn}</b><small>漲 / 跌</small></td></tr>`).join('')}</table></div>
+  <p class="rc-note">平均為等權平均（每檔同權重）；5／20 日表現由站內歷史收盤計算，只含有歷史資料的成員（欄內標示檔數）；成交占比＝題材成員當日成交值 ÷ 全市場（上市＋上櫃含 ETF）成交值，一檔可屬多個題材，各題材占比相加可超過 100%；法人買賣超取自證交所 T86／櫃買三大法人，近 5 個已取得交易日合計。</p></div>
+  ${grp(sel.t.name+' 成員','點股票名稱開啟個股頁')}
+  <div class="rcard"><div class="rc-head"><h3>${sel.t.name}</h3><span>${sel.t.desc}</span></div>
+  <div class="tablewrap"><table class="ov"><tr><th>股票</th><th>收盤 / 漲跌</th><th>5 日</th><th>20 日</th><th>成交值<small>億元</small></th><th>外資 5 日<small>張</small></th><th>法人 5 日<small>張</small></th><th>連買連賣</th><th>標記</th></tr>
+  ${M.map(r=>{const x=r.x;return `<tr data-pickc="${x.code}" class="clk"><td><b>${x.name}</b><small>${x.code} · ${x.market}${x.etf?' · ETF':''}</small></td><td class="num"><b>${fmt(x.close)}</b><small class="${cls(x.change)}">${r.p==null?'—':zp(r.p)}</small></td>
+   <td class="num ${cls(r.r5)}">${r.r5==null?'<small>資料不足</small>':zp(r.r5)}</td><td class="num ${cls(r.r20)}">${r.r20==null?'<small>資料不足</small>':zp(r.r20)}</td><td class="num">${fmt((x.value||0)/1e8,2)}</td>
+   <td class="num ${cls(r.f5)}">${r.f5==null?'—':sgn(r.f5)}</td><td class="num ${cls(r.i5)}">${r.i5==null?'—':sgn(r.i5)}</td><td><small>${stkTxt(x.code)}</small></td><td>${flHtml(x.code)||'<small>—</small>'}${dtTags(x)}</td></tr>`;}).join('')}</table></div>
+  <p class="rc-note">成員 ${M.length} 檔；一檔可屬多個題材：${M.map(r=>themesOf(r.x.code).length>1?`${r.x.name}（${themesOf(r.x.code).map(t=>t.name).join('、')}）`:'').filter(Boolean).join('；')||'無'}。</p></div>
+  <div class="rcard"><div class="rc-head"><h3>關於題材歸類</h3></div><p class="rc-note" style="margin:0">${TH.note}（資料更新 ${dfmt(TH.updated)}；歸類檔案 site/data/themes.json，每個代號都已核對存在於本站股票清單。）</p></div>`;
+  box.querySelectorAll('tr[data-th]').forEach(r=>r.onclick=()=>{THSEL=r.dataset.th;themePage();});
+  box.querySelectorAll('th[data-tk]').forEach(h=>{const f=()=>{TS=TS.k===h.dataset.tk?{k:TS.k,d:-TS.d}:{k:h.dataset.tk,d:-1};themePage();};h.onclick=f;h.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();f();}};});
+}
+const themeCard=c=>{const ts=themesOf(c);if(!ts.length)return '';return `<p class="rc-note thm">站內題材歸類（人工整理，非官方分類）：${ts.map(t=>`<a href="#" class="pill" data-theme="${t.id}">${t.name}</a>`).join(' ')}</p>`;};
+
+/* ---- 日程日曆：除權息（TWT48U／櫃買預告表）、法說會（重大訊息「召開法人說明會」）、財報法定申報期限 ---- */
+function calItems(){if(!EV)return [];const w=W(),tset=themeSet(),L=[];
+  EV.ex.forEach(e=>L.push({d:e.d,type:'ex',c:e.c,n:e.n,mk:e.mk,txt:`${e.k}${e.cash!=null?` · 現金股利 ${fmt(e.cash,4).replace(/0+$/,'').replace(/\.$/,'')} 元`:e.note?` · ${e.note}`:''}${e.stock?` · 配股 ${fmt(e.stock,3)}`:''}`}));
+  EV.ir.forEach(e=>L.push({d:e.d,type:'ir',c:e.c,n:e.n,mk:e.mk,txt:`法人說明會${e.tm?' '+e.tm:''}${e.pl?' · '+e.pl:''}`,sub:e.s+'（'+dfmt(e.ann)+' 公告）'}));
+  EV.fin.forEach(e=>L.push({d:e.d,type:'fin',c:null,n:e.t,txt:'法定期限（規則推算，非個別公司公告日）'}));
+  L.forEach(i=>{i.w=i.c&&w.includes(i.c);i.t=i.c&&tset.has(i.c);i.rank=i.w?0:i.t?1:2;});return L;}
+function calPage(){
+  const box=$('#detail');if(!EV){box.innerHTML='<div class="empty">日程資料載入失敗。</div>';return;}
+  const today=new Date(Date.now()+8*3600e3).toISOString().slice(0,10);let L=calItems();
+  if(CALF.type!=='all')L=L.filter(i=>i.type===CALF.type);
+  if(CALF.who==='watch')L=L.filter(i=>i.w);else if(CALF.who==='theme')L=L.filter(i=>i.w||i.t);
+  const g={};L.forEach(i=>(g[i.d]=g[i.d]||[]).push(i));const ds=Object.keys(g).sort();
+  const tl={ex:'除權息',ir:'法說會',fin:'財報期限'},chip=(k,key,lab)=>`<button data-cf="${key}:${k}" class="${CALF[key]===k?'on':''}">${lab}</button>`;
+  box.innerHTML=`<div class="eyebrow">CALENDAR <span>資料日 ${dfmt(EV.asof)}</span></div>
+  ${grp('日程日曆','除權息、法說會與財報申報期限；自選與題材股排在前面')}
+  <div class="rcard"><div class="rc-head"><h3>篩選</h3><span>共 ${L.length} 筆</span></div><div class="chips calchips">${chip('all','who','全部')}${chip('watch','who','只看自選')}${chip('theme','who','自選＋題材股')}<span class="sepv"></span>${chip('all','type','全部類型')}${chip('ex','type','除權息')}${chip('ir','type','法說會')}${chip('fin','type','財報期限')}</div></div>
+  ${ds.length?ds.map(d=>{const a=g[d].sort((p,q)=>p.rank-q.rank||String(p.c).localeCompare(String(q.c)));const dd=new Date(d+'T00:00:00+08:00');
+   return `<div class="rcard calday ${d<today?'past':d===today?'today':''}"><div class="rc-head"><h3>${dfmt(d)}（週${'日一二三四五六'[dd.getDay()]}）${d===today?' · 今天':d<today?' · 已過':''}</h3><span>${a.length} 筆</span></div>
+   ${a.map(i=>`<div class="calrow" ${i.c?`data-pickc="${i.c}"`:''}><span class="cb ${i.type}">${tl[i.type]}</span><div><b>${i.n}${i.c?` <small>${i.c} · ${i.mk}</small>`:''}</b>${i.w?'<span class="fl w">自選</span>':''}${i.t?themesOf(i.c).slice(0,2).map(t=>`<span class="fl t">${t.name}</span>`).join(''):''}<small>${i.txt}</small>${i.sub?`<small>${i.sub}</small>`:''}</div></div>`).join('')}</div>`;}).join(''):'<div class="rcard"><p class="rc-note" style="margin:0">沒有符合條件的日程（0 筆）。</p></div>'}
+  <div class="rcard"><div class="rc-head"><h3>來源與限制</h3></div><p class="rc-note" style="margin:0">除權息：證交所 TWT48U 除權除息預告表、櫃買中心 tpex_exright_prepost（預告，實際金額以公司公告為準；ETF 收益分配金額常為「待公告」）。法說會：公開資訊觀測站每日重大訊息中「召開法人說明會」公告，由本站每日存檔累積（${EV.irSince?dfmt(EV.irSince)+' 起':'尚無'}）。${EV.irNote} 財報：證券交易法第 36 條法定申報期限（一般產業公司；金融保險證券期貨業期限不同），不是個別公司公告日。</p></div>`;
+  box.querySelectorAll('button[data-cf]').forEach(b=>b.onclick=()=>{const[k,v]=b.dataset.cf.split(':');CALF[k]=v;calPage();});
+}
+const evCard=c=>{if(!EV)return '';const today=new Date(Date.now()+8*3600e3).toISOString().slice(0,10),a=[];
+  EV.ex.filter(e=>e.c===c&&e.d>=today).forEach(e=>a.push(`<li><b>${dfmt(e.d)}</b> ${e.k}${e.cash!=null?`，現金股利 ${fmt(e.cash,4).replace(/0+$/,'').replace(/\.$/,'')} 元`:e.note?`（${e.note}）`:''}${e.stock?`，配股 ${fmt(e.stock,3)}`:''}</li>`));
+  EV.ir.filter(e=>e.c===c&&e.d>=today).forEach(e=>a.push(`<li><b>${dfmt(e.d)}</b> 法人說明會${e.tm?' '+e.tm:''}${e.pl?'，'+e.pl:''}</li>`));
+  if(!a.length)return '';return `<div class="rcard"><div class="rc-head"><h3>近期日程</h3><span>除權息預告・法說會（官方公告）</span></div><ul class="gapl evl">${a.join('')}</ul><p class="rc-note">來源：證交所 TWT48U／櫃買除權息預告表、公開資訊觀測站重大訊息；完整日曆見左側「日程日曆」。</p></div>`;};
+
+/* ---- ETF 合計增減（僅可比較者）對照外資 ---- */
+function etfAgg(E){const F=E.funds,fm=Object.fromEntries(F.map(f=>[f.code,f])),out={};
+  const cmp=new Set(F.filter(f=>f.date&&f.prevDate).map(f=>f.code));
+  Object.entries(E.holdings).forEach(([code,hs])=>{let d=0,up=0,dn=0,n=0,held=0,dA=0,nA=0;
+    hs.forEach(h=>{const f=fm[h.fund];if(!f)return;if(h.shares)held++;if(h.prevShares==null||!cmp.has(h.fund))return;const x=h.shares-h.prevShares;n++;d+=x;if(x>0)up++;else if(x<0)dn++;if(f.active){dA+=x;nA++;}});
+    out[code]={d,up,dn,n,held,dA,nA};});
+  return {A:out,cmp:cmp.size,tot:F.filter(f=>f.date).length,dates:[...new Set(F.filter(f=>f.date).map(f=>f.date))].sort()};}
+const fgnLast=(C,code)=>{if(!C)return null;const mk=BYC()[code]&&BYC()[code].market,got=C.instGot[mk]||[],raw=C.inst[code];if(!raw)return null;for(let i=C.days.length-1;i>=0;i--){if(got.includes(C.days[i])&&raw[i])return {d:C.days[i],v:raw[i][0]/1000};}return null;};
+async function etfAggPage(){
+  const box=$('#detail');box.innerHTML='<div class="empty">正在彙整 ETF 持股變動…</div>';
+  let E,C;try{[E,C]=await Promise.all([loadEF(),CH||(CH=fetch('data/chips.json').then(r=>r.json()))]);}catch(e){box.innerHTML='<div class="empty">ETF 或籌碼資料載入失敗。</div>';return;}
+  if(view!=='etfagg')return;
+  const G=etfAgg(E),BC=BYC();
+  let R=Object.entries(G.A).filter(([c,a])=>a.n>=EAGG.min&&BC[c]&&!BC[c].etf).map(([c,a])=>({c,x:BC[c],a,d:EAGG.act?a.dA:a.d,n:EAGG.act?a.nA:a.n,f:fgnLast(C,c)})).filter(r=>r.n>0&&r.d!==0);
+  R=R.filter(r=>EAGG.dir==='up'?r.d>0:r.d<0).sort((p,q)=>EAGG.dir==='up'?q.d-p.d:p.d-q.d);const tot=R.length;R=R.slice(0,60);
+  const rel=r=>{if(!r.f)return '<small>外資資料未列入</small>';const s=Math.sign(r.d),f=Math.sign(r.f.v);return s*f>0?`<span class="pill ok">同向</span>`:f===0?'<span class="pill">外資持平</span>':'<span class="pill warn">反向</span>';};
+  const chip=(k,key,lab)=>`<button data-ea="${key}:${k}" class="${String(EAGG[key])===String(k)?'on':''}">${lab}</button>`;
+  box.innerHTML=`<div class="eyebrow">ETF FLOWS <span>已接入 ${G.tot} 檔 ETF · 其中 ${G.cmp} 檔可比較</span></div>
+  ${grp('ETF 合計增減','同一檔股票被已接入 ETF 合計增持或減持，對照外資買賣超')}
+  <div class="rcard"><div class="rc-head"><h3>設定</h3><span>ETF 揭露日 ${G.dates.map(dfmt).join('、')}</span></div>
+  <div class="chips calchips">${chip('up','dir','合計增持')}${chip('dn','dir','合計減持')}<span class="sepv"></span>${chip(false,'act','全部 ETF')}${chip(true,'act','只看主動式')}<span class="sepv"></span>${chip(1,'min','≥1 檔可比較')}${chip(3,'min','≥3 檔可比較')}${chip(5,'min','≥5 檔可比較')}</div>
+  <p class="rc-note">只計入「前一個揭露日有資料」的可比較 ETF（${G.cmp} / ${G.tot} 檔）；首次收錄、尚無前期的 ETF 不計入，也無法判定；沒接入的 ETF 不代表沒持有。增減＝基準日股數減前一揭露日股數，含申購買回與公司行動，不等於經理人主動買賣。外資＝證交所 T86／櫃買三大法人最新已取得日，兩者日期不一定相同，僅供對照。符合 ${tot} 檔，顯示前 ${R.length} 檔。</p>
+  <div class="tablewrap"><table class="ov"><tr><th>股票</th><th>ETF 合計增減<small>張（股數變動）</small></th><th>增 / 減<small>可比較 ETF 檔數</small></th><th>被幾檔 ETF 持有</th><th>外資最新日<small>張</small></th><th>與外資</th></tr>
+  ${R.map(r=>`<tr data-pickc="${r.c}" class="clk"><td><b>${r.x.name}</b><small>${r.c} · ${r.x.market}</small></td><td class="num"><b class="${cls(r.d)}">${lotS(r.d)}</b></td><td class="num"><b class="up">${r.a.up}</b> / <b class="down">${r.a.dn}</b><small>共 ${r.n} 檔可比較</small></td><td class="num">${r.a.held} 檔</td>
+   <td class="num">${r.f?`<b class="${cls(r.f.v)}">${sgn(r.f.v)}</b><small>${dfmt(r.f.d)}</small>`:'<small>官方未列入</small>'}</td><td>${rel(r)}</td></tr>`).join('')||'<tr><td colspan="6"><small>沒有符合條件的股票（0 檔）</small></td></tr>'}</table></div></div>`;
+  box.querySelectorAll('button[data-ea]').forEach(b=>b.onclick=()=>{const[k,v]=b.dataset.ea.split(':');EAGG[k]=k==='min'?+v:k==='act'?v==='true':v;etfAggPage();});
+}
+function etfAggLine(s,E,C){const G=etfAgg(E),a=G.A[s.code];if(!a||!a.n)return `<p class="rc-note agg">跨 ETF 合計：可比較的 ETF 中沒有此股票的增減資料（已接入 ${G.tot} 檔、其中 ${G.cmp} 檔可比較）。</p>`;
+  const f=fgnLast(C,s.code);return `<div class="aggbox"><div><small>跨 ETF 合計增減</small><b class="${cls(a.d)}">${lotS(a.d)}</b><small>增 ${a.up} · 減 ${a.dn} · 共 ${a.n} 檔可比較（已接入 ${G.tot} 檔）</small></div>${f?`<div><small>外資 ${dfmt(f.d)}</small><b class="${cls(f.v)}">${sgn(f.v)} 張</b><small>${a.d*f.v>0?'與 ETF 同向':f.v===0?'外資持平':'與 ETF 反向'}</small></div>`:''}</div>`;}
+
+/* ---- 進階篩選（全清單，以站內歷史價量計算；沒資料者不符合，不放寬） ---- */
+let ADV={ds:'',ma:'',vr:'',red:false,brk:'',bias:'',rr:''},ADVOPEN=false;
+const advOn=()=>Object.values(ADV).some(v=>v!==''&&v!==false);
+function advPass(x){const o=mtOf(x.code);if(!o)return false;const g=k=>o[MF(k)];
+  if(ADV.ds!==''){const d=g('distSupport');if(d==null||d>+ADV.ds||!(d>=0||g('supHold')===1))return false;}
+  if(ADV.ma){const k={ma5:'aboveMA5',ma20:'aboveMA20',ma60:'aboveMA60',bull:'bull'}[ADV.ma];if(g(k)!==1)return false;if(ADV.ma==='bull'&&g('aboveMA20')!==1)return false;}
+  if(ADV.vr!==''){const v=g('volRatio');if(v==null||v<+ADV.vr)return false;}
+  if(ADV.red&&g('red')!==1)return false;
+  if(ADV.brk){const k=ADV.brk==='10'?'brk10':'brk20';if(g(k)!==1)return false;}
+  if(ADV.bias!==''){const b=g('bias20');if(b==null||b>+ADV.bias)return false;}
+  if(ADV.rr!==''){const r=g('rr');if(r==null||r<+ADV.rr)return false;}
+  return true;}
+function advUI(n){const el=$('#advbox');if(!el)return;const sel=(k,opts)=>`<select data-adv="${k}">${opts.map(([v,l])=>`<option value="${v}" ${String(ADV[k])===String(v)?'selected':''}>${l}</option>`).join('')}</select>`;
+  el.innerHTML=`<details class="advd" ${advOn()||ADVOPEN?'open':''}><summary>進階條件（全清單計算 · 條件取交集）</summary><div class="advg">
+   <label>距支撐帶${sel('ds',[['','不限'],['0.5','上緣 0.5% 內'],['1','上緣 1% 內'],['2','上緣 2% 內'],['3','上緣 3% 內'],['5','上緣 5% 內']])}</label>
+   <label>均線${sel('ma',[['','不限'],['ma5','收盤站上 MA5'],['ma20','收盤站上 MA20'],['ma60','收盤站上 MA60'],['bull','多頭排列且站上 MA20']])}</label>
+   <label>量比${sel('vr',[['','不限'],['1.2','≥ 1.2'],['1.5','≥ 1.5'],['2','≥ 2']])}<span class="cbx"><input type="checkbox" data-adv="red" ${ADV.red?'checked':''}>收紅（收盤＞開盤）</span></label>
+   <label>突破${sel('brk',[['','不限'],['10','收盤高於前 10 日最高'],['20','收盤高於前 20 日最高']])}</label>
+   <label>排除乖離月線過高${sel('bias',[['','不排除'],['10','乖離 MA20 ≤ 10%'],['15','乖離 MA20 ≤ 15%'],['20','乖離 MA20 ≤ 20%']])}</label>
+   <label>風險報酬比${sel('rr',[['','不限'],['1','≥ 1'],['1.5','≥ 1.5'],['2','≥ 2'],['3','≥ 3']])}</label></div>
+   <p class="rc-note">${MT?`涵蓋 ${MT.n} 檔有歷史資料者（資料日 ${dfmt(MT.date)}），沒有歷史資料的標的在啟用條件時不會列入，不放寬。`:'指標資料載入失敗。'}風險報酬比＝（第一壓力下緣−收盤）÷（收盤−停損），停損＝第一支撐帶下緣 ×0.99；距支撐＝收盤相對第一支撐帶上緣，帶內也算；觀察價位，非買賣建議。${advOn()?` <button class="clr" id="advClr">✕ 清除進階條件</button>`:''}</p>
+   ${advOn()&&n!=null?`<p class="rc-note advn">目前符合 <b>${n}</b> 檔</p>`:''}</details>`;
+  el.querySelector('details').addEventListener('toggle',e=>{ADVOPEN=e.target.open;});
+  el.querySelectorAll('[data-adv]').forEach(c=>c.onchange=()=>{const k=c.dataset.adv;ADV[k]=c.type==='checkbox'?c.checked:c.value;render();});
+  const cl=$('#advClr');if(cl)cl.onclick=e=>{e.preventDefault();ADV={ds:'',ma:'',vr:'',red:false,brk:'',bias:'',rr:''};render();};}
+Object.assign(SORTS,{
+ 'mt:ds':{f:x=>{const d=mv(x.code,'distSupport');return d!=null&&d>=0?-d:null},t:x=>`距支撐上緣 +${fmt(mv(x.code,'distSupport'),1)}%`},
+ 'mt:rr':{f:x=>mv(x.code,'rr'),t:x=>`風險報酬比 ${fmt(mv(x.code,'rr'),2)}`},
+ 'mt:r5':{f:x=>mv(x.code,'r5'),t:x=>`5 日 ${zp(mv(x.code,'r5'))}`},
+ 'mt:r20':{f:x=>mv(x.code,'r20'),t:x=>`20 日 ${zp(mv(x.code,'r20'))}`},
+ 'mt:b20':{f:x=>mv(x.code,'bias20'),t:x=>`乖離月線 ${zp(mv(x.code,'bias20'),1)}`}});

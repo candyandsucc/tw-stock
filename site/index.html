@@ -1,5 +1,5 @@
 <!DOCTYPE html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><meta name="viewport" id="vp" content="width=device-width,initial-scale=1">
-<title>台股研究室｜盤後觀察</title><link rel="stylesheet" href="style.css?v=xd7">
+<title>台股研究室｜盤後觀察</title><link rel="stylesheet" href="style.css?v=xd8">
 <script>(function(){var m='auto';try{m=localStorage.getItem('tw-viewmode')||'auto'}catch(e){}
 var mob=m==='mobile'||(m==='auto'&&matchMedia('(max-width:768px)').matches);
 if(mob)document.documentElement.classList.add('m');
@@ -12,6 +12,9 @@ if(m==='desktop'&&screen.width<=768)document.getElementById('vp').setAttribute('
 <button class="nav" data-view="watch">☆ 我的自選<span id="nWatch">0</span></button>
 <button class="nav" data-view="w25">★ 自選 25 檔總覽<span id="nW25">25</span></button>
 <button class="nav" data-view="etf">▤ ETF<span id="nEtf"></span></button>
+<button class="nav" data-view="theme">◈ 題材族群與強弱</button>
+<button class="nav" data-view="cal">▦ 日程日曆</button>
+<button class="nav" data-view="etfagg">⇅ ETF 合計增減</button>
 <div class="sidebottom">🛡<b>官方資料 · 獨立研究</b>從價格結構出發，<br>為下一個交易日做準備。<br><small>TWSE ＋ TPEx</small></div></div>
 </aside><main>
 <header><span class="crumb">市場研究 › 盤後觀察</span><div class="vsw" id="vsw" role="group" aria-label="版面切換"><button data-vm="auto">自動</button><button data-vm="desktop">🖥 電腦版</button><button data-vm="mobile">📱 手機版</button></div><span class="badge">● 盤後資料 · 更新 <b id="upd">—</b></span></header>
@@ -28,14 +31,16 @@ if(m==='desktop'&&screen.width<=768)document.getElementById('vp').setAttribute('
 <label class="search"><input id="q" placeholder="搜尋代號或名稱，例如 2330"></label>
 <div class="filters"><button class="chosen" data-m="">全部</button><button data-m="上市">上市</button><button data-m="上櫃">上櫃</button><button data-m="ETF">ETF</button>
 <select id="sort"><option value="value">成交金額 ↓</option><option value="volume">成交量 ↓</option><option value="change">漲幅 ↓</option><option value="code">代號 ↑</option>
+<optgroup label="價位與表現（站內歷史計算，無資料排最後）"><option value="mt:ds">距支撐上緣最近 ↑</option><option value="mt:rr">風險報酬比 ↓</option><option value="mt:r5">5 日表現 ↓</option><option value="mt:r20">20 日表現 ↓</option><option value="mt:b20">乖離月線 ↓</option></optgroup>
 <optgroup label="當沖輔助"><option value="dt:amp">振幅 ↓</option><option value="dt:low">成交張數 ↑（低量）</option></optgroup>
 <optgroup label="籌碼（無資料排最後）"><option value="cs:fs">外資連買天數 ↓</option><option value="cs:fsell">外資連賣天數 ↓</option><option value="cs:ts">投信連買天數 ↓</option><option value="cs:f5">外資 5 日買超 ↓</option><option value="cs:t5">投信 5 日買超 ↓</option><option value="cs:i5">法人 5 日合計 ↓</option><option value="cs:i20">法人 20 日合計 ↓</option><option value="cs:qf">外資持股比率 ↓</option></optgroup>
 <optgroup label="信用交易"><option value="cs:use">融資使用率 ↓</option><option value="cs:m5">融資 5 日增加 ↓</option><option value="cs:sh">融券餘額 ↓</option><option value="cs:sbl">借券賣出餘額 ↓</option></optgroup></select></div>
 <div class="scr" id="scr"></div>
 <div class="scr" id="xfbox"></div>
+<div class="scr" id="advbox"></div>
 <div class="listdate" id="listdate"></div>
 <div class="tablehead"><span>股票 / 代號</span><span>收盤 / 漲跌</span></div>
 <div class="stocks" id="list"><div class="empty">正在載入證交所與櫃買中心資料…</div></div></section>
 <section class="detail" id="detail"><div class="empty">選擇一檔股票開始研究。</div></section></div>
 <button id="toTop" aria-label="回到頂部">↑</button><footer>台股研究室 <span>數據有依據，決策有自己的觀點。</span><small>僅供研究參考，非投資建議</small></footer>
-</main></div><script src="app.js?v=xd7"></script></body></html>
+</main></div><script src="app.js?v=xd8"></script></body></html>
