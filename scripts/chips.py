@@ -61,27 +61,6 @@ def tpex_margin(d):
     if not j or not j.get("tables") or not j["tables"][0].get("data"): return None
     return {r[0].strip(): [num(r[6]), num(r[2])] for r in j["tables"][0]["data"]}
 
-YUANTA = [("0050","元大台灣50"),("0051","元大中型100"),("0053","元大電子"),("0055","元大MSCI金融"),("0056","元大高股息"),
-          ("006203","元大MSCI台灣"),("00713","元大台灣高息低波"),("00850","元大臺灣ESG永續"),("00940","元大台灣價值高息")]
-CAPITAL = [("00919","群益台灣精選高息","195"),("00982A","主動群益台灣強棒","399")]
-
-def yuanta(code):
-    # urllib 對此站會卡住，改用 curl
-    try: html = subprocess.run(["curl", "-s", "--max-time", "60", "-A", "Mozilla/5.0", f"https://www.yuantaetfs.com/product/detail/{code}/ratio"], capture_output=True, text=True, timeout=90).stdout
-    except Exception: html = None
-    if not html: return None
-    try:
-        out = subprocess.run(["node", str(ROOT / "scripts" / "yuanta_parse.js")], input=html, capture_output=True, text=True, timeout=60).stdout
-        j = json.loads(out); return None if j.get("error") else j
-    except Exception as e:
-        print("yuanta parse", code, e); return None
-
-def capital(fid, date=None):
-    j = get("https://www.capitalfund.com.tw/CFWeb/api/etf/buyback", {"fundId": fid, "date": date})
-    if not j or j.get("code") != 200: return None
-    d = j["data"]; base = d["pcf"]["date2"]  # PCF 申購買回清單依前一營業日收盤持股編製
-    return dict(date=base, holdings=[dict(code=s["stocNo"].strip(), name=s["stocName"], shares=s["share"], weight=s["weight"]) for s in d.get("stocks", [])])
-
 def main(only_etf=False):
     S = json.loads((OUT / "stocks.json").read_text()); stocks = {s["code"]: s for s in S["stocks"]}
     if not only_etf: chipdata(S, stocks)
@@ -135,33 +114,10 @@ def chipdata(S, stocks):
         if f.name.split("_")[1] not in keep: f.unlink()
 
 def etfdata():
-    funds = []
-    for code, name in YUANTA:
-        cur = yuanta(code); time.sleep(SLEEP)
-        prev = None
-        if cur:
-            (ETFS / f"{code}_{cur['date']}.json").write_text(json.dumps(cur, ensure_ascii=False, separators=(",", ":")))
-            older = sorted(f for f in ETFS.glob(f"{code}_*.json") if f.name[len(code)+1:-5] < cur["date"])
-            if older: prev = json.loads(older[-1].read_text())
-            for f in older[:-3]: f.unlink()
-        funds.append(dict(code=code, name=name, issuer="元大投信", url=f"https://www.yuantaetfs.com/product/detail/{code}/ratio", cur=cur, prev=prev))
-    for code, name, fid in CAPITAL:
-        cur = capital(fid); time.sleep(SLEEP)
-        prev = capital(fid, cur["date"]) if cur else None; time.sleep(SLEEP)
-        funds.append(dict(code=code, name=name, issuer="群益投信", url=f"https://www.capitalfund.com.tw/etf/product/detail/{fid}/portfolio", cur=cur, prev=prev))
-    hold = {}
-    for f in funds:
-        if not f["cur"]: continue
-        cm = {h["code"]: h for h in f["cur"]["holdings"]}; pm = {h["code"]: h for h in f["prev"]["holdings"]} if f["prev"] else None
-        for c in set(cm) | set(pm or {}):
-            r, p = cm.get(c), (pm or {}).get(c)
-            hold.setdefault(c, []).append(dict(fund=f["code"], shares=r["shares"] if r else 0, weight=r["weight"] if r else 0,
-                prevShares=(p["shares"] if p else 0) if pm is not None else None, prevWeight=(p["weight"] if p else 0) if pm is not None else None))
-    etf = dict(funds=[dict(code=f["code"], name=f["name"], issuer=f["issuer"], url=f["url"], ok=bool(f["cur"]),
-                           date=f["cur"]["date"] if f["cur"] else None, prevDate=f["prev"]["date"] if f["prev"] else None,
-                           n=len(f["cur"]["holdings"]) if f["cur"] else 0) for f in funds], holdings=hold)
-    (OUT / "etf.json").write_text(json.dumps(etf, ensure_ascii=False, separators=(",", ":")))
-    print("etf done", [(f["code"], f["cur"] and f["cur"]["date"]) for f in funds])
+    # ETF 持股改由 etf.py 處理（多投信、單檔失敗不中斷、失敗時標示原因）
+    try:
+        import etf; etf.main()
+    except Exception as e: print("etf 失敗（保留前次資料）:", e)
 
 if __name__ == "__main__":
     import sys; main(only_etf="--etf" in sys.argv)
