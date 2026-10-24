@@ -72,17 +72,74 @@ async function overview(){
   <p class="note2">法人買賣超＝外資＋投信＋自營商合計（千股換算張），來源證交所 T86／櫃買中心；形態為依歷史價量自動偵測的觀察標示，不預測突破方向。量比＝最新日成交量 ÷ 近 20 日均量。</p>`;
   box.querySelectorAll('tr[data-c]').forEach(r=>r.onclick=()=>{pick(r.dataset.c);toDetail();});
 }
-function chart(rows){
-  const R=rows.slice(-60),w=760,h=260,vh=60,p=36;const cl=rows.map(r=>r[4]);
-  const ma=n=>R.map((_,i)=>{const j=rows.length-R.length+i;return j+1>=n?cl.slice(j+1-n,j+1).reduce((a,b)=>a+b)/n:null;});
+let CT={code:null,n:60,sel:null};
+function dayStat(rows,j){
+  const r=rows[j],c=r[4],pc=j>0?rows[j-1][4]:null;
+  const avg=(k,f)=>j+1>=k?rows.slice(j+1-k,j+1).reduce((a,x)=>a+f(x),0)/k:null;
+  const v20=avg(20,x=>x[5]||0);
+  return {j,last:j===rows.length-1,date:r[0],o:r[1],h:r[2],l:r[3],c,chg:pc==null?null:c-pc,pct:pc?(c-pc)/pc*100:null,vol:r[5],vr:v20?r[5]/v20:null,ma5:avg(5,x=>x[4]),ma20:avg(20,x=>x[4]),ma60:avg(60,x=>x[4])};
+}
+const CW=760,CH0=260,CVH=60,CP=36;
+function chart(rows,n){
+  const R=rows.slice(-n),w=CW,h=CH0,vh=CVH,p=CP,off=rows.length-R.length;const cl=rows.map(r=>r[4]);
+  const ma=k=>R.map((_,i)=>{const j=off+i;return j+1>=k?cl.slice(j+1-k,j+1).reduce((a,b)=>a+b)/k:null;});
   const lines=[['#4871db',R.map(r=>r[4])],['#f0a020',ma(5)],['#d4483b',ma(20)],['#2c9a6f',ma(60)]];
   const vals=lines.flatMap(l=>l[1]).filter(v=>v!=null);const mn=Math.min(...vals),mx=Math.max(...vals);
   const X=i=>p+i*(w-p*2)/(R.length-1||1),Y=v=>10+(h-20)*(1-(v-mn)/(mx-mn||1));const vm=Math.max(...R.map(r=>r[5]||0));
   const path=a=>a.map((v,i)=>v==null?'':`${a.slice(0,i).some(x=>x!=null)?'L':'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join('');
   const grid=[0,.25,.5,.75,1].map(t=>{const v=mn+(mx-mn)*t;return `<line x1="${p}" x2="${w-p}" y1="${Y(v)}" y2="${Y(v)}" stroke="#eef1f6"/><text x="${w-p+4}" y="${Y(v)+4}" font-size="10" fill="#98a2b3">${fmt(v)}</text>`}).join('');
-  const bars=R.map((r,i)=>`<rect x="${X(i)-3}" width="6" y="${h+vh-(r[5]/vm)*vh}" height="${(r[5]/vm)*vh}" fill="${r[4]>=(R[i-1]||r)[4]?'#f2b8b2':'#a9dcc6'}"><title>${r[0]} 量 ${fmt(r[5]/1000,0)} 張</title></rect>`).join('');
-  return `<svg viewBox="0 0 ${w} ${h+vh+20}" width="100%">${grid}<path d="${path(R.map(r=>r[4]))}L${X(R.length-1)},${h}L${X(0)},${h}Z" fill="#edf2ff" opacity=".6"/>${lines.map(([c,a],k)=>`<path d="${path(a)}" fill="none" stroke="${c}" stroke-width="${k?1.2:2}" ${k?'stroke-dasharray="4 2"':''}/>`).join('')}${bars}
-  <text x="${p}" y="${h+vh+16}" font-size="10" fill="#98a2b3">${dfmt(R[0][0])}</text><text x="${w-p}" y="${h+vh+16}" font-size="10" fill="#98a2b3" text-anchor="end">${dfmt(R.at(-1)[0])}</text></svg>`;
+  const bw=Math.max(1.5,Math.min(6,(w-p*2)/R.length*.62));
+  const bars=R.map((r,i)=>{const pc=off+i>0?rows[off+i-1][4]:r[4];return `<rect x="${X(i)-bw/2}" width="${bw}" y="${h+vh-(r[5]/vm)*vh}" height="${(r[5]/vm)*vh}" fill="${r[4]>=pc?'#f2b8b2':'#a9dcc6'}"/>`}).join('');
+  const sv={w,h,vh,p,off,n:R.length};
+  return {sv,X,Y,svg:`<svg id="ctsvg" viewBox="0 0 ${w} ${h+vh+20}" width="100%" tabindex="0" role="img" aria-label="價格走勢圖，可用滑鼠、點選、左右滑動或左右方向鍵查看每日數據">${grid}<path d="${path(R.map(r=>r[4]))}L${X(R.length-1)},${h}L${X(0)},${h}Z" fill="#edf2ff" opacity=".6"/>${lines.map(([c,a],k)=>`<path d="${path(a)}" fill="none" stroke="${c}" stroke-width="${k?1.2:2}" ${k?'stroke-dasharray="4 2"':''}/>`).join('')}${bars}
+  <text x="${p}" y="${h+vh+16}" font-size="10" fill="#98a2b3">${dfmt(R[0][0])}</text><text x="${w-p}" y="${h+vh+16}" font-size="10" fill="#98a2b3" text-anchor="end">${dfmt(R.at(-1)[0])}</text>
+  <g id="ctcur" style="display:none;pointer-events:none"><line id="ctl" y1="4" y2="${h+vh}" stroke="#5f6f8c" stroke-width="1" stroke-dasharray="3 2"/><circle id="ctd5" r="3" fill="#f0a020" stroke="#fff" stroke-width="1"/><circle id="ctd20" r="3" fill="#d4483b" stroke="#fff" stroke-width="1"/><circle id="ctd60" r="3" fill="#2c9a6f" stroke="#fff" stroke-width="1"/><circle id="ctdc" r="5" stroke="#fff" stroke-width="2"/></g></svg>`};
+}
+function chartTop(H){
+  const rows=H.rows;if(CT.code!==H.code)CT={code:H.code,n:Math.min(60,rows.length),sel:null};
+  CT.n=Math.min(CT.n,rows.length);if(CT.sel!=null&&CT.sel<rows.length-CT.n)CT.sel=null;
+  const c=chart(rows,CT.n);window._CC={c,rows};
+  const rb=rows.length>60?`<span class="rng"><button data-n="60" class="${CT.n===60?'on':''}">近 60 日</button><button data-n="${rows.length}" class="${CT.n===rows.length?'on':''}">全部 ${rows.length} 日</button></span>`:'';
+  return `<div class="charttitle"><b>價格走勢<small>近 ${CT.n} 個交易日（共 ${rows.length} 日）</small></b><span class="rngwrap">${rb}<span>日線收盤 · 均線 · 成交量</span></span></div>
+  <div class="chartbox" id="chartbox">${c.svg}<div class="cttip" id="cttip" style="display:none"></div></div>
+  <div class="ctnote">電腦：滑鼠移到圖上看每日數據、點一下固定；手機：點選或左右滑動；鍵盤可用左右鍵。</div>
+  <div class="ma" id="ctma">${maRow(dayStat(rows,CT.sel!=null?CT.sel:rows.length-1),CT.sel!=null)}</div>`;
+}
+function maRow(st,pinned){
+  const head=pinned?`<b>${dfmt(st.date)}</b> <button class="ctback" id="ctback">回到最新</button>`:st.last?'最新':`${dfmt(st.date)}（預覽）`;
+  return `<span class="mad">${head}</span><span><i style="background:#f0a020"></i>MA5 <b>${fmt(st.ma5)}</b></span><span><i style="background:#d4483b"></i>MA20 <b>${fmt(st.ma20)}</b></span><span><i style="background:#2c9a6f"></i>MA60 <b>${fmt(st.ma60)}</b></span><span>量比 <b>${st.vr==null?'—':fmt(st.vr)+' 倍'}</b></span>`;
+}
+function tipHtml(st){
+  const k=cls(st.chg),ch=st.chg==null?'—':`${sg(st.chg)}${fmt(st.chg)}（${sg(st.pct)}${fmt(st.pct)}%）`;
+  return `<div class="tt-d">${dfmt(st.date)}${st.last?' · 最新':''}</div><div class="tt-g"><span>開</span><b>${fmt(st.o)}</b><span>高</span><b>${fmt(st.h)}</b><span>低</span><b>${fmt(st.l)}</b><span>收</span><b class="${k}">${fmt(st.c)}</b></div>
+  <div class="tt-r"><span>漲跌</span><b class="${k}">${ch}</b></div><div class="tt-r"><span>成交量</span><b>${fmt(st.vol/1000,0)} 張</b></div><div class="tt-r"><span>量比</span><b>${st.vr==null?'—':fmt(st.vr)+' 倍'}</b></div>
+  <div class="tt-r"><span class="m5">MA5</span><b>${fmt(st.ma5)}</b></div><div class="tt-r"><span class="m20">MA20</span><b>${fmt(st.ma20)}</b></div><div class="tt-r"><span class="m60">MA60</span><b>${fmt(st.ma60)}</b></div>`;
+}
+function bindChart(){
+  const top=$('#ctop'),svg=$('#ctsvg');if(!top||!svg||!window._CC)return;
+  const {c,rows}=window._CC,sv=c.sv,box=$('#chartbox'),tip=$('#cttip'),cur=$('#ctcur'),mab=$('#ctma');
+  top.querySelectorAll('.rng button').forEach(b=>b.onclick=()=>{CT.n=+b.dataset.n;top.innerHTML=chartTop(window._H);bindChart();});
+  const clear=()=>{CT.sel=null;cur.style.display='none';tip.style.display='none';setMa(dayStat(rows,rows.length-1),false);};
+  const setMa=(st,pin)=>{mab.innerHTML=maRow(st,pin);const bk=$('#ctback');if(bk)bk.onclick=clear;};
+  const show=(i,pin)=>{
+    i=Math.max(0,Math.min(sv.n-1,i));const st=dayStat(rows,sv.off+i),x=c.X(i);
+    cur.style.display='';$('#ctl').setAttribute('x1',x);$('#ctl').setAttribute('x2',x);
+    const dot=(id,v)=>{const e=$(id);if(v==null)e.style.display='none';else{e.style.display='';e.setAttribute('cx',x);e.setAttribute('cy',c.Y(v));}};
+    dot('#ctd5',st.ma5);dot('#ctd20',st.ma20);dot('#ctd60',st.ma60);dot('#ctdc',st.c);
+    $('#ctdc').setAttribute('fill',st.chg>0?'#e0392d':st.chg<0?'#1a9a5a':'#6b778c');
+    tip.innerHTML=tipHtml(st);tip.style.display='block';
+    const bw=box.clientWidth,tw=tip.offsetWidth,px=x/sv.w*bw;let left=px+12;if(left+tw>bw-4)left=px-tw-12;tip.style.left=Math.max(2,left)+'px';
+    setMa(st,pin);return i;
+  };
+  const idxOf=e=>{const r=svg.getBoundingClientRect(),vx=(e.clientX-r.left)/r.width*sv.w;return Math.round((vx-sv.p)/((sv.w-sv.p*2)/(sv.n-1||1)));};
+  const pinned=()=>CT.sel!=null;
+  const pin=i=>{i=show(i,true);CT.sel=sv.off+i;};
+  svg.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'){if(e.buttons)pin(idxOf(e));else show(idxOf(e),false);}else if(e.buttons)pin(idxOf(e));});
+  svg.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse')pin(idxOf(e));});
+  svg.addEventListener('click',e=>pin(idxOf(e)));
+  svg.addEventListener('pointerleave',e=>{if(e.pointerType!=='mouse')return;if(pinned())show(CT.sel-sv.off,true);else clear();});
+  svg.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();const cu=pinned()?CT.sel-sv.off:sv.n-1;pin(cu+(e.key==='ArrowLeft'?-1:1));}else if(e.key==='Escape')clear();});
+  if(pinned())show(CT.sel-sv.off,true);
 }
 const band=b=>b.low!==b.high?`<em>價格帶 ${fmt(b.low)}–${fmt(b.high)}</em>`:'';
 const tags=b=>`<div class="tags">${b.basis.map(x=>`<i>${x}</i>`).join('')}</div>`;
@@ -105,8 +162,7 @@ async function pick(code){
   <div><strong>${fmt(close)}</strong><span class="${cls(s.change)}">${sg(s.change)}${fmt(s.change)} (${sg(s.change)}${fmt(s.change/(close-s.change)*100)}%)</span></div></div>
   <div class="metrics"><span>開盤<b>${fmt(s.open)}</b></span><span>最高<b>${fmt(s.high)}</b></span><span>最低<b>${fmt(s.low)}</b></span><span>成交量<b>${fmt(s.volume/1000,0)} 張</b></span><span>成交金額<b>${fmt(s.value/1e8)} 億</b></span></div>
   <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${s.etf?'<div id="etfpage"><div class="empty">正在載入 ETF 持股明細…</div></div>':''}`;
-  if(H){html+=`<div class="chartpanel"><div class="charttitle"><b>價格走勢<small>近 ${Math.min(60,H.rows.length)} 個交易日（共 ${H.rows.length} 日）</small></b><span>日線收盤 · 均線 · 成交量</span></div>${chart(H.rows)}
-  <div class="ma"><span><i style="background:#f0a020"></i>MA5 <b>${fmt(H.ma5)}</b></span><span><i style="background:#d4483b"></i>MA20 <b>${fmt(H.ma20)}</b></span><span><i style="background:#2c9a6f"></i>MA60 <b>${fmt(H.ma60)}</b></span><span>量比 <b>${vr20(H.rows)}</b></span></div>
+  if(H){html+=`<div class="chartpanel"><div id="ctop">${chartTop(H)}</div>
   ${H.adjusted?`<div class="note2 adjnote">⚙ 已除權還原：${H.adjusted.map(a=>`${dfmt(a.date)} 除權（前收 ${fmt(a.prevClose)} → 參考價 ${fmt(a.refPrice)}，還原因子 ${fmt(a.factor,4)}，來源${a.src}）`).join('；')}。除權日以前的價格已乘以還原因子、成交量除以還原因子，均線、量比與支撐壓力皆用還原價；以下顯示的歷史價位與當時實際成交價不同。</div>`:''}<div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
   <div class="sectionlabel"><h3>接下來，看哪裡？</h3><span>價格結構觀察 · 依 ${dfmt(H.date)} 收盤 · 來源 ${s.src}</span></div>`;
   if(L){const cf=confluence(H,L);html+=lvcards(L,cf,close,H)+`<p class="note2 disclaimer">支撐與壓力為本站依歷史價格結構自行計算的觀察價位，可能與其他網站不同，不是目標價或買賣建議。</p>`+(L.limits?`<p class="note2">漲跌停參考（依漲跌幅限制，非結構價位）：明日漲停 ${fmt(L.limits.up)} · 跌停 ${fmt(L.limits.down)}</p>`:'');}
@@ -243,6 +299,7 @@ function etfPage(s,E){
 const selS=()=>ALL.find(x=>x.code===sel);
 const skToggle=(S,k)=>{if(S.k===k)S.d=-S.d;else{S.k=k;S.d=-1;}};
 function bindResearch(){
+  bindChart();
   const E_=()=>EF,rr=()=>EF.then(E=>{const s=selS();if(!s)return;$('#research').innerHTML=research(s,window._H,CH_,E);bindResearch();}),
     rp=()=>EF.then(E=>{const s=selS();const p=$('#etfpage');if(s&&p){p.innerHTML=etfPage(s,E);bindResearch();}});
   document.querySelectorAll('#research .tabs button[data-t]').forEach(b=>b.onclick=()=>{etfTab=b.dataset.t;rr();});

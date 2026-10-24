@@ -237,3 +237,19 @@ html.m .etfwrap table.etft td:first-child,html.m .etfwrap table.etft th:first-ch
 .chip em{font-style:normal;color:#98a2b3;font-size:10px}.chip.bad{background:#fff4ec;border-color:#f3d6a4}.chip.bad em{color:#b54708}.chip.stale{background:#fff9e8;border-color:#f0dfa0}
 html.m .covrow{grid-template-columns:1fr}html.m .covrow .covn{display:inline}
 .etfwrap table.etft th,.etfwrap table.etft td{padding:8px 6px;font-size:12px}
+/* 走勢圖互動：十字線、浮動資訊、MA 列 */
+.chartbox{position:relative}#ctsvg{display:block;touch-action:pan-y;cursor:crosshair;outline:none;-webkit-tap-highlight-color:transparent;user-select:none}
+#ctsvg:focus-visible{outline:2px solid #4871db;outline-offset:2px;border-radius:4px}
+.cttip{position:absolute;top:6px;z-index:5;pointer-events:none;background:rgba(255,255,255,.96);border:1px solid #cfd8ea;border-radius:8px;box-shadow:0 4px 14px rgba(36,50,75,.16);padding:7px 9px;font-size:11.5px;line-height:1.5;color:#24324b;min-width:128px;max-width:200px}
+.cttip .tt-d{font-weight:700;margin-bottom:3px}.cttip .tt-g{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:0 6px;margin-bottom:2px}.cttip .tt-g span,.cttip .tt-r span{color:#7f8ba0}
+.cttip .tt-g b,.cttip .tt-r b{font-variant-numeric:tabular-nums;text-align:right}.cttip .tt-r{display:flex;justify-content:space-between;gap:10px}
+.cttip .up{color:#d63a2f}.cttip .down{color:#1a8f55}.cttip .m5{color:#f0a020}.cttip .m20{color:#d4483b}.cttip .m60{color:#2c9a6f}
+.ctnote{font-size:11px;color:#98a2b3;margin-top:4px}.ma .mad{white-space:nowrap}
+.ctback{border:1px solid #4871db;background:#fff;color:#4871db;border-radius:999px;font-size:11px;padding:1px 9px;margin-left:4px;cursor:pointer}.ctback:hover{background:#edf2ff}
+.rngwrap{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;background:none!important;padding:0!important}
+.rng{display:inline-flex;gap:4px}.rng button{border:1px solid #cfd8ea;background:#fff;color:#4871db;border-radius:4px;font-size:11px;padding:3px 8px;cursor:pointer}.rng button.on{background:#4871db;color:#fff;border-color:#4871db}
+.charttitle .rngwrap>span:not(.rng){background:#fff;color:#4871db;padding:3px 8px;border-radius:4px;font-size:11px}
+html.m .cttip{font-size:11px;padding:6px 7px;min-width:118px}html.m .ctnote{display:block}
+html.m .cttip{position:static;left:auto!important;top:auto;max-width:none;min-width:0;margin-top:6px;display:none;grid-template-columns:1fr 1fr;gap:1px 18px;box-shadow:none;background:#f7f9fd}
+html.m .cttip[style*="block"]{display:grid!important}html.m .cttip .tt-d,html.m .cttip .tt-g{grid-column:1/-1}
+html.m .ma{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px}html.m .ma .mad{grid-column:1/-1}
