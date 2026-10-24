@@ -391,7 +391,7 @@ async function pick(code){
   <div class="titleprice"><div><h2>${s.name} <button class="star" style="font-size:18px;color:${W().includes(code)?'#f0a020':'#b8c1cf'}" onclick="toggle('${code}');pick('${code}')">${W().includes(code)?'★':'☆'}</button></h2><p>資料日期 ${dfmt(s.date)}${META&&s.date!==(s.market==='上市'?META.twseDate:META.tpexDate)?'<span class="stalechip">此股資料日早於市場最新日</span>':''} · 來源：${s.src}</p></div>
   <div><strong>${fmt(close)}</strong><span class="${cls(s.change)}">${sg(s.change)}${fmt(s.change)} (${sg(s.change)}${fmt(s.change/(close-s.change)*100)}%)</span></div></div>
   <div class="metrics"><span>開盤<b>${fmt(s.open)}</b></span><span>最高<b>${fmt(s.high)}</b></span><span>最低<b>${fmt(s.low)}</b></span><span>成交量<b>${fmt(s.volume/1000,0)} 張</b></span><span>成交金額<b>${fmt(s.value/1e8)} 億</b></span></div>
-  <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${flagCard(s)}${evCard(s.code)}${newsCard(s)}<div id="sl-verdict"></div>${grp('走勢圖','日線收盤、均線、成交量')}`;
+  <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div><div id="sl-verdict"></div>${flagCard(s)}${evCard(s.code)}${newsCard(s)}${grp('走勢圖','日線收盤、均線、成交量')}`;
   if(H){html+=`<div class="chartpanel"><div id="ctop">${chartTop(H)}</div>
   ${chartNotes(H)}<div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
   ${grp('價位怎麼看','支撐、壓力與位階在哪（觀察價位，非買賣建議）· 依 '+dfmt(H.date)+' 收盤')}`;
@@ -433,7 +433,7 @@ function research(s,H,C,E){
   const vrv=H&&H.rows.length>=20?(H.rows.at(-1)[5]/(H.rows.slice(-20).reduce((a,r)=>a+(r[5]||0),0)/20)):null;const lastI=raw.at(-1);const fd=lastI&&got.includes(days.at(-1))?lastI[0]/1000:null;
   const vline=vrv==null?'':`<li><b>${vrv<1?'成交量縮小':'成交量放大'}</b> 成交量約為近 20 日均量的 ${fmt(vrv)} 倍。</li>`;
   const fline=fd==null?'':`<li><b>${fd>=0?'外資買超':'外資賣超'}</b> 外資（含陸資、外資自營商）${dfmt(days.at(-1))} 合計 ${fmt(Math.abs(fd),0)} 張。</li>`;
-  o+=`<div class="rcard verdict"><div class="rc-head"><h3>綜合判讀</h3><span>${dfmt(s.date)} 收盤</span></div><h4>${indName||(s.etf?'ETF':'產業資料待確認')}${rk?` · 同日成交金額第 ${rk} 名`:''}</h4><p>個股成交 ${fmt(s.value/1e8)} 億元。${D.length?`近 ${D.length} 日法人買超 ${buy} 日，合計 ${z(sum)} 張。`:'官方資料未提供此股票的法人買賣超。'}</p><ul class="vl">${vline}${fline}</ul></div>`;
+  o+=`<div class="rcard verdict"><div class="rc-head"><h3>綜合判讀</h3><span>${dfmt(s.date)} 收盤</span></div><h4>${indName||(s.etf?'ETF':'產業資料待確認')}${rk?` · 同日成交金額第 ${rk} 名`:''}</h4><p>個股成交 ${fmt(s.value/1e8)} 億元。${D.length?`近 ${D.length} 日法人買超 ${buy} 日，合計 ${z(sum)} 張。`:'官方資料未提供此股票的法人買賣超。'}</p><ul class="vl">${vline}${fline}</ul>${verdictRows(s,H,C,E)}</div>`;
   P.verdict=o;o='';
   o+=fundHtml(s,H)+valCard(s)+finCard(s)+divCard(s);
   o+=`<div class="rcard"><div class="rc-head"><h3>產業熱度</h3><span>依官方產業分類</span></div>${indName?`<div class="sector-line"><span>${indName}</span><b>第 ${rk} / ${ranks.length}</b><strong>${fmt(agg[s.ind].v/1e8)} 億</strong></div>
@@ -854,3 +854,89 @@ function dyCard(s){if(!DY)return '';const r=DY.items[s.code],days=DY.days,T='個
   <div class="m4 m3"><div><small>最新（${dmd(days.at(-1))}）</small><b>${r.at(-1)==null?'—':fmt(last,1)+'<em>%</em>'}</b><small>當天當沖占成交量</small></div><div><small>近 5 日平均</small><b>${fmt(a5,1)}<em>%</em></b></div><div><small>近 ${N} 日平均</small><b>${fmt(a20,1)}<em>%</em></b><small>最高 ${fmt(v[mxI],1)}%（${dmd(days[mxI])}）</small></div></div>
   <div class="sparks"><div><h5>${s.name} 當沖比走勢（%）</h5>${spark(v,days,x=>fmt(x,1)+'%','#c26a1c')}</div></div>
   <p class="rc-note sep">證交所 TWTB4U、櫃買中心；±2 個百分點為界，非買賣建議。</p></div>`;}
+
+
+/* ================= 綜合判讀：判讀（結論與理由；全由站內既有指標以規則產生，沒資料的項目整行不顯示） ================= */
+function verdictRows(s,H,C,E){
+  const D={},close=s.close,sg0=v=>v>0?1:v<0?-1:0;
+  // 走勢
+  if(H&&H.rows.length>=20&&H.ma5!=null&&H.ma20!=null){
+    const m5=H.ma5,m20=H.ma20,m60=H.ma60,b20=(close/m20-1)*100,above=close>m20,hot=b20>=10;
+    const bull=m60!=null?(m5>m20&&m20>m60):m5>m20,bear=m60!=null?(m5<m20&&m20<m60):m5<m20;
+    let sc,sh,tx;
+    if(above&&bull){sc=hot?0:1;sh=hot?'趨勢偏多但短線過熱':'趨勢偏多';tx=hot?'趨勢偏多但短線過熱，乖離月線過大，宜等拉回、不宜追價。':'趨勢偏多，站穩月線之上且均線多頭排列。';}
+    else if(above){sc=0;sh='趨勢待確認';tx=hot?'站上月線但均線尚未多頭排列，且短線過熱，趨勢待確認。':'站上月線，但均線尚未多頭排列，趨勢待確認。';}
+    else if(bear){sc=-1;sh='趨勢偏空';tx='趨勢偏空，收盤在月線之下且均線空頭排列。';}
+    else{sc=-1;sh='跌破月線';tx='收盤在月線之下，短線轉弱，要等重新站回月線。';}
+    D.trend=['走勢',tx,sc,sh];
+  }
+  // 價位
+  if(H&&H.levels){
+    const o=rrCalc(H,H.levels,close);
+    if(o.err)D.price=['價位','支撐帶尚未形成或資料不足，無法評估進場觀察區與風險報酬比。',0,null];
+    else{const {s1,r1}=o,st=bandState(s1,'s',close),dS=(close/s1.high-1)*100,dR=r1?(r1.low/close-1)*100:null;
+      let sc=0,sh=null,tx;
+      if(o.state==='bad'){sc=-1;sh='支撐失守';tx='已跌破停損參考價，支撐結構失守，進場觀察區不成立。';}
+      else if(o.state==='warn'){sc=-1;sh='支撐轉弱';tx='收盤已落到支撐帶之下，結構轉弱。';}
+      else{
+        const loc=st.k==='in'?'正在測試支撐帶':dS<=3?'貼近支撐、進場觀察區成立':(dR!=null&&dR<=2)?'逼近壓力帶，上檔空間有限':dS>=10?'離支撐已遠，追價的下檔風險較大':'位於支撐與壓力之間，離進場觀察區還有距離';
+        const rr=o.rr==null?'':o.rr>=2?`，風險報酬比佳（約 1:${fmt(o.rr,1)}）`:o.rr<1?'，風險報酬比偏差（報酬小於風險）':'，風險報酬比普通';
+        tx=loc+rr+'。';
+        if(o.rr!=null&&o.rr>=2&&dS<=3){sc=1;sh='價位具風險報酬優勢';}else if(o.rr!=null&&o.rr<1){sc=-1;sh='風險報酬不佳';}
+      }
+      D.price=['價位',tx,sc,sh];}
+  }
+  // 籌碼
+  {const cs=CS&&CS.items[s.code],i=cs&&cs.i,c=cs&&cs.c,pos=[],neg=[],note=[];let sc=0;
+   if(i){const fs=i[0],f20=i[4];
+     if(fs!=null&&f20!=null){if(fs>=3||(fs>0&&f20>0)){pos.push(fs>=3?'外資連買':'外資買超');sc+=1;}else if(fs<=-3||(fs<0&&f20<0)){neg.push(fs<=-3?'外資連賣':'外資賣超');sc-=1;}else note.push('外資買賣分歧');}
+     if(i[1]!=null&&Math.abs(i[1])>=3){if(i[1]>0){pos.push('投信連買');sc+=1;}else{neg.push('投信連賣');sc-=1;}}}
+   if(c&&c[4]!=null&&c[4]>=50)note.push('融資使用偏高、籌碼較浮動');
+   if(E&&!s.etf){E._G=E._G||etfAgg(E);const a=E._G.A[s.code];
+     if(a&&a.n){const f=fgnLast(C,s.code);
+       if(f&&f.v!==0&&a.d!==0&&a.d*f.v<0)note.push(`ETF 合計${a.d>0?'加碼':'減碼'}但外資${f.v>0?'買超':'賣超'}（方向相反）`);
+       else if(a.d>0){pos.push('ETF 合計加碼');sc+=1;}else if(a.d<0){neg.push('ETF 合計減碼');sc-=1;}}}
+   const td=TD&&TD.items[s.code];
+   if(td){const tr=TD.trend[s.code]||[],pv=tr.length>1?tr[tr.length-2]:null;if(pv){const d=td[0]-pv[1];if(d>=0.3){pos.push('大戶持股比上升');sc+=1;}else if(d<=-0.3){neg.push('大戶持股比下降');sc-=1;}}}
+   if(pos.length||neg.length||note.length){
+     const lab=sc>0?'偏多':sc<0?'偏空':'分歧';
+     D.chips=['籌碼',`籌碼${lab}：${[...pos,...neg,...note].join('、')}。`,Math.max(-1,Math.min(1,sc)),sc>0?'籌碼偏多':sc<0?'籌碼偏空':null];}}
+  // 基本面（ETF 不適用）
+  if(!s.etf){const pos=[],neg=[],note=[];let sc=0;
+   const rv=RV&&RV.items[s.code],rl=rv&&rv.length&&rv[rv.length-1];
+   if(rl&&rl[2]!=null){if(rl[2]>=10){pos.push(`營收年增（約 ${rl[2]>0?'+':''}${fmt(rl[2],0)}%）`);sc+=1;}else if(rl[2]<=-10){neg.push(`營收年減（約 ${fmt(rl[2],0)}%）`);sc-=1;}else note.push('營收與去年持平');}
+   const fi=FI&&FI.items[s.code]&&FI.items[s.code][0];
+   if(fi&&fi[6]!=null){if(fi[6]>0)pos.push('單季獲利');else{neg.push('單季虧損');sc-=1;}}
+   const vh=VH&&VH.items[s.code],vs=vh&&[['本益比',vh.pe],['股價淨值比',vh.pb]].find(([,x])=>x&&x.cur!=null&&x.n>=VH.minN);
+   if(vs){const p=vs[1].pct;if(p>=80)note.push(`${vs[0]}處近期高檔`);else if(p<=20)note.push(`${vs[0]}處近期低檔`);else note.push('估值居中');}
+   if(pos.length||neg.length||note.length){
+     const lab=sc>0?'偏強':sc<0?'偏弱':'持平',txt=(sc<0?[...neg,...pos]:[...pos,...neg]).join('、'),nt=note.join('、');
+     D.fund=['基本面',`基本面${lab}${txt?'：'+txt:''}${nt?(txt?'，':'：')+nt:''}。`,Math.max(-1,Math.min(1,sc)),sc>0?'基本面偏強':sc<0?'基本面偏弱':null];}}
+  // 風險
+  {const P=[],chk=[];let warn=false;
+   if(FL){chk.push('交易限制');const t=flTags(s.code);if(t.length){warn=true;P.push(`有交易限制（${t.map(x=>x[1]).join('、')}）`);}}
+   const a=SC&&SC.items[s.code];
+   if(a){chk.push('技術風險');const names=Object.fromEntries(SC.defs.risk.map(r=>[r.id,r.name])),w=a.risk.filter(r=>r.warn).map(r=>names[r.id]);if(w.length){warn=true;P.push(`技術面出現${w.join('、')}警示`);}}
+   if(H){chk.push('價格異常');const g=H.gaps,sus=g&&g.ev?g.ev.filter(e=>e.kind!=='ex'):[];
+     if(sus.length){warn=true;P.push('價格有疑似未還原的異常日，均線與價位可能失真');}
+     if(H.rows.length<60)P.push('歷史資料不足 60 日，MA60 不可用');}
+   else P.push('尚無歷史價量，走勢與價位無法判讀（資料不足）');
+   const dy=DY&&DY.items[s.code];
+   if(dy&&dy.at(-1)!=null){const v=dy.map(x=>x==null?0:x),a20=v.reduce((p,q)=>p+q,0)/v.length;if(v.at(-1)-a20>=2){warn=true;P.push('當沖比高於自身平均，短線換手偏熱');}}
+   if(P.length)D.risk=['風險',P.join('；')+'。',0,null,warn];
+   else if(chk.length)D.risk=['風險',`未偵測到${chk.join('、')}警示。`,0,null,false];}
+  const rows=['trend','price','chips','fund','risk'].filter(k=>D[k]).map(k=>D[k]);
+  if(!rows.length)return '';
+  // 總結論
+  const dims=['trend','price','chips','fund'].filter(k=>D[k]&&D[k][2]!==undefined),tot=dims.reduce((a,k)=>a+D[k][2],0);
+  const pos=dims.filter(k=>D[k][2]>0&&D[k][3]).map(k=>D[k][3]),neg=dims.filter(k=>D[k][2]<0&&D[k][3]).map(k=>D[k][3]);
+  if(D.trend&&D.trend[3]==='趨勢偏多但短線過熱')neg.push('短線過熱');
+  const dir=dims.length<2?'中性':tot>=2?'偏多':tot<=-2?'偏空':'中性';
+  let sum;
+  if(dims.length<2)sum='可判讀的項目不足，暫不下結論。';
+  else if(dir==='偏多')sum=`整體偏多，主因：${pos.join('、')}${neg.length?`；但${neg.join('、')}`:''}。`;
+  else if(dir==='偏空')sum=`整體偏空，主因：${neg.join('、')}${pos.length?`；僅${pos.join('、')}較有支撐`:''}。`;
+  else sum=pos.length&&neg.length?`整體中性、多空互見：${pos.join('、')}，但${neg.join('、')}。`:pos.length||neg.length?`整體中性：${(pos.length?pos:neg).join('、')}，其餘項目沒有明顯方向。`:'整體中性，沒有明顯的多空訊號。';
+  if(D.risk&&D.risk[4])sum+='另有風險提醒，見下方。';
+  return `<div class="vjd"><div class="vsum"><b class="vdir ${dir==='偏多'?'up':dir==='偏空'?'down':''}">${dir}</b><span>${sum}</span></div><div class="vrows">${rows.map(([t,h,,,w])=>`<div class="vrow ${t==='風險'?(w?'bad':'ok'):''}"><span class="vtag">${t}</span><span class="vtx">${h}</span></div>`).join('')}</div><p class="vsm">依站內指標自動產生的資料判讀，僅描述資料，非買賣建議。</p></div>`;
+}
