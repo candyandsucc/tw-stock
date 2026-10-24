@@ -48,7 +48,7 @@ async function overview(){
    <td class="num">${n?`<b class="${cls(n.total)}">${z1(n.total).replace(/\.0$/,'')}</b><small>近3日 ${z1(n.sum3).replace(/\.0$/,'')}</small>`:'<small>官方未列入</small>'}</td>
    <td>${t?`<span class="pill ${t.state==='守住'?'ok':'warn'}">上升趨勢線${t.state}</span>`:''}${b?`<span class="pill">${b.days} 日平台 · ${b.state}</span>`:''}${!t&&!b?'<small>—</small>':''}</td>
    <td class="num"><small>${i.days||0} 日${i.adjusted?' · 已還原':''}</small></td></tr>`;};
-  box.innerHTML=`<div class="eyebrow">WATCHLIST OVERVIEW <span>Candy 自選 ${I.length} 檔 · 資料日期 ${dfmt(W25.date)}</span></div>
+  box.innerHTML=`<div class="eyebrow">WATCHLIST OVERVIEW <span>自選 ${I.length} 檔 · 資料日期 ${dfmt(W25.date)}</span></div>
   <div class="titleprice"><div><h2>自選 ${I.length} 檔總覽</h2><p>點列可看個股頁 · 價位為本站依歷史價格結構自行計算的觀察價位，不是目標價或買賣建議</p></div></div>
   <div class="tablewrap"><table class="ov"><tr><th>股票</th><th>收盤 / 漲跌</th><th>第一支撐<small>距現價</small></th><th>第一壓力<small>距現價</small></th><th>量比<small>對20日均量</small></th><th>法人買賣超<small>張 · 最新日</small></th><th>形態（觀察用）</th><th>歷史</th></tr>${I.map(rowh).join('')}</table></div>
   <p class="note2">${bad.length?'資料提醒：'+bad.map(i=>`${i.name}（${i.issues.join('、')}）`).join('；')+'。':'25 檔皆具收盤行情、均線、量比與支撐壓力。'}</p>
