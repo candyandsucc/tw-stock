@@ -9,6 +9,10 @@ TOP_N = int(os.environ.get("TOP_N", "30"))          # 每市場依成交金額�
 MONTHS = int(os.environ.get("MONTHS", "6"))
 EXTRA = os.environ.get("EXTRA", "2330,0050,0056,00878,2317,2454,6488,5347,8299,3105,8046,2449,2344").split(",")
 SLEEP = float(os.environ.get("SLEEP", "1.3"))
+# 自選 25 檔（site/data/watchlist.json）固定納入每日歷史抓取；ONLY=代號,代號 可只補抓指定股票（補資料／測試用）
+try: WATCH = json.loads((OUT / "watchlist.json").read_text(encoding="utf-8"))["codes"]
+except Exception: WATCH = []
+ONLY = [c for c in os.environ.get("ONLY", "").split(",") if c]
 
 def get(url, tries=3):
     for i in range(tries):
@@ -134,7 +138,8 @@ ranked = []
 for mk in ("上市", "上櫃"):
     pool = sorted([s for s in stocks.values() if s["market"] == mk], key=lambda s: -(s["value"] or 0))
     ranked += [s["code"] for s in pool[:TOP_N]]
-targets = list(dict.fromkeys([c for c in EXTRA if c in stocks] + ranked))
+targets = list(dict.fromkeys([c for c in EXTRA + WATCH if c in stocks] + ranked))
+if ONLY: targets = [c for c in ONLY if c in stocks]
 print("history targets", len(targets))
 for i, code in enumerate(targets):
     s = stocks[code]; h = history(s)
@@ -149,6 +154,8 @@ for i, code in enumerate(targets):
     s["hasHistory"] = True
     print(i + 1, code, len(h))
 
+for _c, _s in stocks.items():  # 歷史檔已存在者一律標記（ONLY 補抓時不會遺失其他股票旗標）
+    if (HIS / f"{_c}.json").exists(): _s["hasHistory"] = True
 meta = dict(updated=now, twseDate=twse_date, tpexDate=tpex_date, instDates=inst_dates,
             counts=dict(twse=sum(1 for s in stocks.values() if s["market"] == "上市"), tpex=sum(1 for s in stocks.values() if s["market"] == "上櫃")),
             sources=dict(twse="https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX", tpex="https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes",
