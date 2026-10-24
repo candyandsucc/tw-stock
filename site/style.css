@@ -75,3 +75,66 @@ table.ov tr[data-c]{cursor:pointer}table.ov tr[data-c]:hover{background:#f6f8fe}
 .pill.ok{background:#e6f0ff;color:#2a5bd7}.pill.warn{background:#fff1dc;color:#b45f06}
 .adjnote{background:#fff8e6;border-radius:8px;padding:8px 10px;margin:8px 0}
 .patt h3 small{font-weight:400;color:#98a2b3;font-size:12px}
+/* 版面切換（自動／電腦版／手機版） */
+.vsw{display:inline-flex;border:1px solid #dfe5ed;border-radius:8px;overflow:hidden;background:#fff;margin-left:auto;margin-right:12px}
+.vsw button{padding:6px 10px;font-size:12px;color:#6b778c;white-space:nowrap}.vsw button.on{background:#edf2ff;color:#365fd2;font-weight:600}
+#menuBtn,#toTop{display:none}
+/* ===== 手機版：html.m（≤768px 自動套用，或手動強制） ===== */
+html.m body{font-size:15px;overflow-x:hidden}
+html.m body{max-width:480px;margin:0 auto}
+@media (max-width:768px){html.m body{max-width:none}}
+html.m .shell{display:block}
+html.m aside{position:fixed;inset:0 auto auto 50%;transform:translateX(-50%);width:100%;max-width:480px;height:56px;padding:0 14px;display:flex;align-items:center;justify-content:space-between;z-index:50;border-right:0;border-bottom:1px solid #e7ebf2}
+@media (max-width:768px){html.m aside{max-width:none}}
+html.m .brand{font-size:17px}html.m .brand small{display:none}
+html.m #menuBtn{display:block;min-height:44px;padding:0 14px;border:1px solid #dfe5ed;border-radius:8px;font-size:14px;background:#fff}
+html.m .navbox{display:none;position:absolute;top:56px;left:0;right:0;background:#fff;border-bottom:1px solid #e7ebf2;box-shadow:0 8px 16px rgba(30,50,90,.08);padding:8px 12px 14px}
+html.m aside.open .navbox{display:block}
+html.m .navtitle,html.m .sidebottom{display:none}html.m aside.open .sidebottom{display:block;position:static;margin:10px 6px 0}
+html.m .nav{min-height:48px;font-size:15px;padding:12px 14px}
+html.m main{width:100%;margin:0;padding:56px 14px 0}
+html.m header{height:auto;flex-wrap:wrap;gap:8px;padding:10px 0}html.m .crumb{display:none}
+html.m .vsw{margin:0;flex:1}html.m .vsw button{flex:1;min-height:40px;padding:6px 4px;font-size:13px}
+html.m .badge{font-size:11px;padding:6px 10px}
+html.m .heading{margin:16px 0 14px;gap:10px}html.m .eyebrow,html.m .heading p{display:none}html.m h1{font-size:23px;margin:0}
+html.m .refresh{min-height:44px;padding:8px 14px;font-size:13px;white-space:nowrap}
+html.m .overview{grid-template-columns:1fr 1fr;padding:6px 0;margin-bottom:16px}
+html.m .overview>div{border-right:0;border-bottom:1px solid #edf0f6;padding:12px 16px}
+html.m .overview .note{grid-column:1/-1;border-bottom:0}html.m .overview strong{font-size:22px;margin:4px 0}
+html.m .workspace{display:block}
+html.m .listpanel{position:static;margin-bottom:14px}
+html.m .detail,html.m .listpanel{min-width:0;max-width:100%}
+html.m .detail{padding:16px 14px;overflow:hidden}
+html.m .search input{font-size:16px;min-height:46px}
+html.m .filters{flex-wrap:wrap;gap:6px}html.m .filters button{min-height:40px;padding:6px 14px;font-size:14px}
+html.m .filters select{min-height:40px;font-size:14px;width:100%;margin:2px 0 0;border:1px solid #e1e6ee;border-radius:8px;padding:0 8px}
+html.m .stocks{max-height:46vh}
+html.m .row{padding:14px;gap:12px;min-height:56px}html.m .row .star{font-size:22px;padding:4px 6px}
+html.m .row .nm b{font-size:15px}html.m .row .nm small{font-size:11px}html.m .row .px b{font-size:15px}html.m .row .px small{font-size:11px}
+html.m .titleprice{flex-wrap:wrap;gap:8px}html.m .titleprice strong{font-size:26px}
+html.m .titleprice .star{min-width:44px;min-height:44px}
+html.m .metrics{flex-wrap:wrap;gap:8px 18px;justify-content:flex-start}
+html.m .chartpanel{overflow:hidden}html.m .charttitle{flex-wrap:wrap;gap:6px}html.m svg{max-width:100%;height:auto}
+html.m .ma{flex-wrap:wrap;gap:6px 14px}
+html.m .levels,html.m .levels.l3{grid-template-columns:1fr}
+html.m .sectionlabel{flex-wrap:wrap;gap:4px}
+html.m .sector-line{grid-template-columns:1fr;gap:4px}html.m .sector-line strong{text-align:left}
+html.m .pos3{gap:4px}html.m .pos3 strong{font-size:17px}
+html.m .m4{grid-template-columns:1fr 1fr;gap:10px}
+html.m .cat3 b{font-size:15px}
+html.m .inst-sum{flex-wrap:wrap;gap:6px}
+html.m .rcard,html.m .card{padding:14px;overflow-x:auto}
+html.m .rcard table,html.m .card table,html.m details table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+html.m .tabs{flex-wrap:wrap}html.m .tabs button{min-height:40px;padding:6px 16px;font-size:13px}
+html.m details summary{min-height:40px;display:flex;align-items:center;font-size:13px}
+html.m .tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:10px -14px;padding:0 14px}
+html.m table.ov{min-width:760px;font-size:13px}
+html.m table.ov td:first-child,html.m table.ov th:first-child{position:sticky;left:0;background:#fff;z-index:1;box-shadow:2px 0 0 #eef1f6}
+html.m table.ov td{padding:12px 6px}
+html.m footer{flex-wrap:wrap;gap:6px;padding:20px 0 70px}html.m footer small{margin-left:0;width:100%}
+html.m .method,html.m .note2{overflow-wrap:anywhere}
+html.m #toTop{display:block;position:fixed;right:14px;bottom:16px;width:48px;height:48px;border-radius:50%;background:#365fd2;color:#fff;font-size:20px;box-shadow:0 4px 12px rgba(30,50,90,.25);z-index:40}
+.detail,.listpanel{min-width:0}
+html.m .vsw{flex:1 1 100%;width:100%}html.m .vsw button{white-space:nowrap}
+html.m .overview>div:nth-child(3){grid-column:1/-1}
+html.m #detail{scroll-margin-top:64px}

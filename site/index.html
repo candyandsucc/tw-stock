@@ -1,15 +1,20 @@
-<!DOCTYPE html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>台股研究室｜盤後觀察</title><link rel="stylesheet" href="style.css"></head><body>
-<div class="shell"><aside>
+<!DOCTYPE html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><meta name="viewport" id="vp" content="width=device-width,initial-scale=1">
+<title>台股研究室｜盤後觀察</title><link rel="stylesheet" href="style.css">
+<script>(function(){var m='auto';try{m=localStorage.getItem('tw-viewmode')||'auto'}catch(e){}
+var mob=m==='mobile'||(m==='auto'&&matchMedia('(max-width:768px)').matches);
+if(mob)document.documentElement.classList.add('m');
+if(m==='desktop'&&screen.width<=768)document.getElementById('vp').setAttribute('content','width=1280');})();</script></head><body>
+<div class="shell"><aside id="side">
 <div class="brand"><span class="logo">📈</span><span>台股研究室<small>TAIWAN MARKET LAB</small></span></div>
-<div class="navtitle">WORKSPACE</div>
+<button id="menuBtn" aria-label="選單" aria-expanded="false">☰ 選單</button>
+<div class="navbox"><div class="navtitle">WORKSPACE</div>
 <button class="nav active" data-view="all">〰 全部股票<span id="nAll"></span></button>
 <button class="nav" data-view="watch">☆ 我的自選<span id="nWatch">0</span></button>
 <button class="nav" data-view="w25">★ 自選 25 檔總覽<span id="nW25">25</span></button>
 <button class="nav" data-view="etf">▤ ETF<span id="nEtf"></span></button>
-<div class="sidebottom">🛡<b>官方資料 · 獨立研究</b>從價格結構出發，<br>為下一個交易日做準備。<br><small>TWSE ＋ TPEx</small></div>
+<div class="sidebottom">🛡<b>官方資料 · 獨立研究</b>從價格結構出發，<br>為下一個交易日做準備。<br><small>TWSE ＋ TPEx</small></div></div>
 </aside><main>
-<header><span>市場研究 › 盤後觀察</span><span class="badge">● 盤後資料 · 更新 <b id="upd">—</b></span></header>
+<header><span class="crumb">市場研究 › 盤後觀察</span><div class="vsw" id="vsw" role="group" aria-label="版面切換"><button data-vm="auto">自動</button><button data-vm="desktop">🖥 電腦版</button><button data-vm="mobile">📱 手機版</button></div><span class="badge">● 盤後資料 · 更新 <b id="upd">—</b></span></header>
 <div class="heading"><div><div class="eyebrow">YOUR DAILY MARKET PERSPECTIVE</div><h1>看懂價位，再做決定<span>。</span></h1><p>整理價量、觀察支撐壓力，建立自己的開盤參考。</p></div>
 <button class="refresh" onclick="location.reload()">↻ 更新行情</button></div>
 <div class="overview">
@@ -25,5 +30,5 @@
 <div class="tablehead"><span>股票 / 代號</span><span>收盤 / 漲跌</span></div>
 <div class="stocks" id="list"><div class="empty">正在載入證交所與櫃買中心資料…</div></div></section>
 <section class="detail" id="detail"><div class="empty">選擇一檔股票開始研究。</div></section></div>
-<footer>台股研究室 <span>數據有依據，決策有自己的觀點。</span><small>僅供研究參考，非投資建議</small></footer>
+<button id="toTop" aria-label="回到頂部">↑</button><footer>台股研究室 <span>數據有依據，決策有自己的觀點。</span><small>僅供研究參考，非投資建議</small></footer>
 </main></div><script src="app.js"></script></body></html>

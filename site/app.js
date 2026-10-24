@@ -1,5 +1,18 @@
 const $=s=>document.querySelector(s);const fmt=(v,d=2)=>v==null?'—':Number(v).toLocaleString('zh-TW',{minimumFractionDigits:d,maximumFractionDigits:d});
 const cls=v=>v>0?'up':v<0?'down':'flat';const sg=v=>v>0?'+':'';
+
+/* 版面模式：auto（依螢幕）／desktop／mobile，儲存在 localStorage（tw-viewmode），不含任何個資 */
+const VM=()=>{try{return localStorage.getItem('tw-viewmode')||'auto'}catch(e){return 'auto'}};
+const isM=()=>VM()==='mobile'||(VM()==='auto'&&matchMedia('(max-width:768px)').matches);
+function applyMode(){const m=VM();document.documentElement.classList.toggle('m',isM());
+  document.querySelectorAll('#vsw button').forEach(b=>b.classList.toggle('on',b.dataset.vm===m));
+  const vp=document.getElementById('vp');if(vp)vp.setAttribute('content',(m==='desktop'&&screen.width<=768)?'width=1280':'width=device-width,initial-scale=1');
+  if(!isM())$('#side').classList.remove('open');}
+document.querySelectorAll('#vsw button').forEach(b=>b.onclick=()=>{try{localStorage.setItem('tw-viewmode',b.dataset.vm)}catch(e){}applyMode();});
+$('#menuBtn').onclick=()=>{const o=$('#side').classList.toggle('open');$('#menuBtn').setAttribute('aria-expanded',o)};
+$('#toTop').onclick=()=>scrollTo({top:0,behavior:'smooth'});
+matchMedia('(max-width:768px)').addEventListener('change',applyMode);applyMode();
+const toDetail=()=>{if(isM())setTimeout(()=>$('#detail').scrollIntoView({behavior:'smooth',block:'start'}),50);};
 let ALL=[],META={},INST={},view='all',mkt='',sel=null;
 const W=()=>JSON.parse(localStorage.getItem('tw-watch')||'["2330","0050"]');
 const setW=a=>{localStorage.setItem('tw-watch',JSON.stringify(a));render();};
@@ -12,7 +25,7 @@ async function init(){
   $('#cTw').innerHTML=META.counts.twse+'<em> 檔</em>';$('#cTp').innerHTML=META.counts.tpex+'<em> 檔</em>';
   $('#dTw').textContent='交易日期 '+dfmt(META.twseDate);$('#dTp').textContent='交易日期 '+dfmt(META.tpexDate);
   $('#nAll').textContent=ALL.length;$('#nEtf').textContent=ALL.filter(x=>x.etf).length;
-  document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav').forEach(x=>x.classList.remove('active'));b.classList.add('active');view=b.dataset.view;render();if(view==='w25')overview();});
+  document.querySelectorAll('.nav').forEach(b=>b.onclick=()=>{document.querySelectorAll('.nav').forEach(x=>x.classList.remove('active'));b.classList.add('active');view=b.dataset.view;$('#side').classList.remove('open');render();if(view==='w25'){overview();toDetail();}});
   document.querySelectorAll('.filters button').forEach(b=>b.onclick=()=>{document.querySelectorAll('.filters button').forEach(x=>x.classList.remove('chosen'));b.classList.add('chosen');mkt=b.dataset.m;render();});
   $('#q').oninput=render;$('#sort').onchange=render;
   render();const h=location.hash.slice(1);pick(ALL.find(x=>x.code===h)?h:'2330');
@@ -30,7 +43,7 @@ function render(){
   <div class="nm"><b>${x.name}</b><small>${x.code}<span class="tag">${x.market}${x.etf?' · ETF':''}</span>${x.hasHistory?'':' <span title="尚無月歷史">◦</span>'}</small></div>
   <div class="px"><b>${fmt(x.close)}</b><small class="${cls(x.change)}">${sg(x.change)}${fmt(x.change)} (${sg(x.change)}${fmt(pct(x)*100)}%)</small></div></div>`).join('')||'<div class="empty">沒有符合的股票</div>';
   if(L.length>300)$('#list').insertAdjacentHTML('beforeend','<div class="empty">僅顯示前 300 檔，請用搜尋縮小範圍</div>');
-  $('#list').querySelectorAll('.row').forEach(r=>r.onclick=e=>{if(e.target.dataset.s)toggle(e.target.dataset.s);else pick(r.dataset.c);});
+  $('#list').querySelectorAll('.row').forEach(r=>r.onclick=e=>{if(e.target.dataset.s)toggle(e.target.dataset.s);else{pick(r.dataset.c);toDetail();}});
 }
 let W25=null;
 async function overview(){
@@ -53,7 +66,7 @@ async function overview(){
   <div class="tablewrap"><table class="ov"><tr><th>股票</th><th>收盤 / 漲跌</th><th>第一支撐<small>距現價</small></th><th>第一壓力<small>距現價</small></th><th>量比<small>對20日均量</small></th><th>法人買賣超<small>張 · 最新日</small></th><th>形態（觀察用）</th><th>歷史</th></tr>${I.map(rowh).join('')}</table></div>
   <p class="note2">${bad.length?'資料提醒：'+bad.map(i=>`${i.name}（${i.issues.join('、')}）`).join('；')+'。':'25 檔皆具收盤行情、均線、量比與支撐壓力。'}</p>
   <p class="note2">法人買賣超＝外資＋投信＋自營商合計（千股換算張），來源證交所 T86／櫃買中心；形態為依歷史價量自動偵測的觀察標示，不預測突破方向。量比＝最新日成交量 ÷ 近 20 日均量。</p>`;
-  box.querySelectorAll('tr[data-c]').forEach(r=>r.onclick=()=>{pick(r.dataset.c);});
+  box.querySelectorAll('tr[data-c]').forEach(r=>r.onclick=()=>{pick(r.dataset.c);toDetail();});
 }
 function chart(rows){
   const R=rows.slice(-60),w=760,h=260,vh=60,p=36;const cl=rows.map(r=>r[4]);
