@@ -258,12 +258,12 @@ function upgradeDetails(root){
     const s=d.querySelector(':scope>summary');if(!s)return;d.dataset.xb='1';
     const label=s.textContent.trim();
     s.classList.add('xbtn');s.setAttribute('role','button');s.setAttribute('tabindex','0');
-    s.innerHTML=`<span class="xi" aria-hidden="true">▼</span><span class="xt"></span>`;
+    s.innerHTML=`<span class="xi" aria-hidden="true">▸</span><span class="xt"></span>`;
     const t=s.querySelector('.xt'),ic=s.querySelector('.xi');
     const body=document.createElement('div');body.className='xbody';
     const inner=document.createElement('div');inner.className='xinner';
     [...d.childNodes].forEach(n=>{if(n!==s)inner.appendChild(n)});body.appendChild(inner);d.appendChild(body);
-    const set=o=>{s.setAttribute('aria-expanded',o?'true':'false');ic.textContent=o?'▲':'▼';t.textContent=o?'收合':label;};
+    const set=o=>{s.setAttribute('aria-expanded',o?'true':'false');ic.textContent=o?'▾':'▸';t.textContent=o?'收合':label;};
     set(d.open);if(d.open)body.style.height='auto';
     s.addEventListener('click',e=>{
       e.preventDefault();
