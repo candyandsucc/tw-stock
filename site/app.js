@@ -412,7 +412,7 @@ const z=v=>v==null?'—':(v>0?'+':'')+fmt(v,1);
 const grp=(t,sub)=>`<div class="sectionlabel"><h3>${t}</h3><span>${sub}</span></div>`;
 function posTrack(s,L){const s1=L&&L.support[0],r1=L&&L.resistance[0],close=s.close;if(!s1||!r1||r1.price<=s1.price)return '';
   const pos=(close-s1.price)/(r1.price-s1.price)*100;
-  return `<div class="rcard postrack"><div class="rc-head sub"><h3>收盤在支撐與壓力之間的位置</h3><span>第一支撐 → 第一壓力</span></div><div class="track"><i style="left:${Math.max(0,Math.min(100,pos))}%"></i></div>
+  return `<div class="rcard postrack"><div class="rc-head"><h3>收盤在支撐與壓力之間的位置</h3><span>第一支撐 → 第一壓力</span></div><div class="track"><i style="left:${Math.max(0,Math.min(100,pos))}%"></i></div>
    <div class="pos3"><div><small>第一支撐</small><strong class="down">${fmt(s1.price)}</strong><em>價格帶 ${fmt(s1.low)}–${fmt(s1.high)}</em></div><div><small>收盤價</small><strong>${fmt(close)}</strong><em>位於區間 ${fmt(pos,1)}%</em></div><div><small>第一壓力</small><strong class="up">${fmt(r1.price)}</strong><em>價格帶 ${fmt(r1.low)}–${fmt(r1.high)}</em></div></div></div>`;}
 function fillResearch(s,H,C,E){const P=research(s,H,C,E),set=(id,h)=>{const e=$('#'+id);if(e)e.innerHTML=h;};
   set('sl-verdict',P.verdict);set('sl-chips',P.inst+P.credit);set('sl-etf',P.etfh+P.etfc);set('sl-fund',P.fund);set('sl-meth',P.method);}

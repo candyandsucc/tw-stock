@@ -293,3 +293,34 @@ html.m .sparks{grid-template-columns:1fr}
 
 table.ov .ovtot td{background:#f4f7fd;border-top:2px solid #cfd8ee}table.ov td .fl{margin:1px 2px 1px 0;white-space:nowrap}
 table.ov th:nth-child(12){text-align:left}
+
+/* ===== 個股頁層級（xd6）：大區塊標題 .sectionlabel ＝ 容器（深藍實心）；子卡片只用卡內小標（無底色、無色條），避免與大標題同寬同風格 ===== */
+#detail .sectionlabel{background:#1f3a8a;border-left:0;border-radius:10px;padding:12px 16px;margin:32px 0 2px;display:flex;justify-content:space-between;align-items:baseline;gap:2px 12px;flex-wrap:wrap}
+#detail .eyebrow+.sectionlabel{margin-top:12px}
+#detail .sectionlabel h3{color:#fff;font-size:16px;font-weight:700;margin:0}
+#detail .sectionlabel span{color:#c9d6f5;font-size:12px}
+#detail .rc-head,#detail .rc-head.sub,#detail .charttitle,#detail .card>h3{background:none;border-left:0;border-radius:0;margin:0 0 12px;padding:0 0 8px;border-bottom:1px solid #e6ebf5}
+#detail .rc-head h3,#detail .charttitle>b,#detail .card>h3{font-size:14px;font-weight:700;color:#1f3a8a}
+#detail .rc-head span,#detail .charttitle small{color:#8a95a7;font-size:11px}
+#detail .rc-head.sub{margin:18px 0 10px;padding:14px 0 6px;border-top:1px solid #e6ebf5;border-bottom:0}
+#detail .rcard.verdict .rc-head,#detail .gapc.warn .rc-head{background:none;border-left:0}
+#detail .rcard.verdict .rc-head{border-bottom-color:#efdca6}
+#detail .verdict .rc-head h3{color:#7a5a10;font-size:14px}
+#detail .gapc.warn .rc-head h3{color:#8a2a22}
+#detail .gapc.warn .rc-head{border-bottom-color:#f3b9b4}
+html.m #detail .rc-head,html.m #detail .charttitle{margin:0 0 10px;padding:0 0 8px}
+html.m #detail .rc-head.sub{margin:16px 0 10px;padding:12px 0 6px}
+/* 走勢圖面板改成與其他子卡片同樣的卡片外觀 */
+#detail .chartpanel{border:1px solid #e8ecf3;border-radius:12px;padding:18px 20px;margin-top:16px;background:#fbfcfe}
+html.m #detail .chartpanel{padding:14px}
+#detail .charttitle .rngwrap>span:not(.rng){background:#edf2ff}
+/* 支撐／壓力列：左＝標題＋標籤＋結構、右＝價格＋距離資訊，所有卡片同一格式 */
+#detail .lvrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 14px;align-items:start;margin:12px 0 8px}
+#detail .lvrow>div:first-child{text-align:left}
+#detail .lvrow>div:first-child>span{display:block;font-size:13px;font-weight:600;color:#46546f;margin-bottom:2px}
+#detail .lvrow>div:last-child{text-align:right;min-width:116px}
+#detail .lvrow .tags{justify-content:flex-start}
+#detail .lvrow .strn{display:inline-block;text-align:left;margin-top:6px}
+#detail .lvrow strong{font-size:22px;line-height:1.2}
+#detail .lvrow>div:last-child em{white-space:nowrap}
+#detail .lvrow+.lvrow{margin-top:12px;padding-top:12px}
