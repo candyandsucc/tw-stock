@@ -110,7 +110,7 @@ def chipdata(S, stocks):
     print("chips done", days[-1], got["上市"][-1:], got["上櫃"][-1:], mgot)
     # 清除超過 30 個交易日的快取
     keep = set(days)
-    for f in CACHE.glob("*.json"):
+    for f in list(CACHE.glob("inst_*.json")) + list(CACHE.glob("margin_*.json")):   # 只清自己的快取（crm/crs/crq 由 extra.py 管理）
         if f.name.split("_")[1] not in keep: f.unlink()
 
 def etfdata():

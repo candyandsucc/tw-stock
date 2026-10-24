@@ -1,5 +1,5 @@
 <!DOCTYPE html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><meta name="viewport" id="vp" content="width=device-width,initial-scale=1">
-<title>台股研究室｜盤後觀察</title><link rel="stylesheet" href="style.css?v=xd2">
+<title>台股研究室｜盤後觀察</title><link rel="stylesheet" href="style.css?v=xd3">
 <script>(function(){var m='auto';try{m=localStorage.getItem('tw-viewmode')||'auto'}catch(e){}
 var mob=m==='mobile'||(m==='auto'&&matchMedia('(max-width:768px)').matches);
 if(mob)document.documentElement.classList.add('m');
@@ -27,7 +27,9 @@ if(m==='desktop'&&screen.width<=768)document.getElementById('vp').setAttribute('
 <div class="paneltitle"><h2 id="listTitle">全部股票</h2><span id="listCount"></span></div>
 <label class="search"><input id="q" placeholder="搜尋代號或名稱，例如 2330"></label>
 <div class="filters"><button class="chosen" data-m="">全部</button><button data-m="上市">上市</button><button data-m="上櫃">上櫃</button><button data-m="ETF">ETF</button>
-<select id="sort"><option value="value">成交金額 ↓</option><option value="volume">成交量 ↓</option><option value="change">漲幅 ↓</option><option value="code">代號 ↑</option></select></div>
+<select id="sort"><option value="value">成交金額 ↓</option><option value="volume">成交量 ↓</option><option value="change">漲幅 ↓</option><option value="code">代號 ↑</option>
+<optgroup label="籌碼（無資料排最後）"><option value="cs:fs">外資連買天數 ↓</option><option value="cs:fsell">外資連賣天數 ↓</option><option value="cs:ts">投信連買天數 ↓</option><option value="cs:f5">外資 5 日買超 ↓</option><option value="cs:t5">投信 5 日買超 ↓</option><option value="cs:i5">法人 5 日合計 ↓</option><option value="cs:i20">法人 20 日合計 ↓</option><option value="cs:qf">外資持股比率 ↓</option></optgroup>
+<optgroup label="信用交易"><option value="cs:use">融資使用率 ↓</option><option value="cs:m5">融資 5 日增加 ↓</option><option value="cs:sh">融券餘額 ↓</option><option value="cs:sbl">借券賣出餘額 ↓</option></optgroup></select></div>
 <div class="scr" id="scr"></div>
 <div class="scr" id="xfbox"></div>
 <div class="listdate" id="listdate"></div>
@@ -35,4 +37,4 @@ if(m==='desktop'&&screen.width<=768)document.getElementById('vp').setAttribute('
 <div class="stocks" id="list"><div class="empty">正在載入證交所與櫃買中心資料…</div></div></section>
 <section class="detail" id="detail"><div class="empty">選擇一檔股票開始研究。</div></section></div>
 <button id="toTop" aria-label="回到頂部">↑</button><footer>台股研究室 <span>數據有依據，決策有自己的觀點。</span><small>僅供研究參考，非投資建議</small></footer>
-</main></div><script src="app.js?v=xd2"></script></body></html>
+</main></div><script src="app.js?v=xd3"></script></body></html>
