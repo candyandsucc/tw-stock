@@ -274,17 +274,15 @@ function chart(rows,n){
   <text x="${p}" y="${h+vh+16}" font-size="10" fill="#98a2b3">${dfmt(R[0][0])}</text><text x="${w-p}" y="${h+vh+16}" font-size="10" fill="#98a2b3" text-anchor="end">${dfmt(R.at(-1)[0])}</text>
   <g id="ctcur" style="display:none;pointer-events:none"><line id="ctl" y1="4" y2="${h+vh}" stroke="#5f6f8c" stroke-width="1" stroke-dasharray="3 2"/><circle id="ctd5" r="3" fill="#f0a020" stroke="#fff" stroke-width="1"/><circle id="ctd20" r="3" fill="#d4483b" stroke="#fff" stroke-width="1"/><circle id="ctd60" r="3" fill="#2c9a6f" stroke="#fff" stroke-width="1"/><circle id="ctdc" r="5" stroke="#fff" stroke-width="2"/></g></svg>`};
 }
-function gapCard(H){
-  const g=H.gaps,adj=H.adjusted||[],n=H.rows.length,ev=g?g.ev:[],sus=ev.filter(e=>e.kind!=='ex'),exs=ev.filter(e=>e.kind==='ex');
-  if(!sus.length&&!exs.length&&!adj.length&&n>=60)return '';
-  const li=[];
-  adj.forEach(a=>li.push(`<li class="ok">✓ <b>${dfmt(a.date)}</b> 官方除權（前收 ${fmt(a.prevClose)} → 參考價 ${fmt(a.refPrice)}），已還原：前段價格 × ${fmt(a.factor,4)}、成交量 ÷ 同因子，來源${a.src}。</li>`));
-  sus.forEach(e=>li.push(`<li class="bad">⚠ <b>${dfmt(e.d)}</b> 單日 ${e.pct>0?'+':''}${fmt(e.pct,1)}%（${fmt(e.prev)} → ${fmt(e.c)}）：${e.kind==='unk'?'官方除權息資料當日取不到，無法確認；':'證交所／櫃買官方除權息資料查無該日的除權息參考價（或收盤偏離參考價逾 10.5%）；'}${e.big?'<b>疑似分割／減資／面額變更／未還原</b>':'超過 ±10% 漲跌幅限制，<b>疑似未還原或特殊事件</b>'}。</li>`));
-  exs.forEach(e=>li.push(`<li>ℹ <b>${dfmt(e.d)}</b> 單日 ${fmt(e.pct,1)}%：為官方除權息日（參考價 ${fmt(e.ref)}），已含除息缺口，不視為異常；價格未做還原（還原僅限參考價／前收 ≤ 0.9 的重大除權）。</li>`));
-  let ex='';
-  if(g&&g.suspect){const m=H.ma60;ex=`<p class="rc-note"><b>均線與 60 日高的處理：</b>疑似事件日 ${dfmt(g.since)} 起共 ${g.nAfter} 日資料。MA5／MA20／MA60 與 60 日高<b>只用事件日（含）之後的價格</b>計算，不跨越跳空。${m==null?`MA60 需 60 日，事件後僅 ${g.nAfter} 日 → <b>資料不足，已隱藏 MA60</b>。`:`MA60（事件後 60 日）＝${fmt(m)}。`} 60 日高（事件後）＝${fmt(g.hi60)}${g.hi60raw!==g.hi60?`；若不排除事件前資料則為 ${fmt(g.hi60raw)}（含未還原價格，不採用）`:''}。支撐與壓力價位帶仍由完整歷史結構推算、可能跨越事件日，僅供參考。</p>`;}
-  if(n<60&&!(g&&g.suspect))ex+=`<p class="rc-note"><b>資料不足：</b>此股票目前僅 ${n} 個交易日的歷史資料，MA60 需至少 60 日 → <b>已隱藏 MA60</b>${n<20?'（MA20 亦不足）':''}；60 日高以現有 ${n} 日計。新上市或剛納入歷史涵蓋的標的會隨每日累積自動補齊。</p>`;
-  return `<div class="rcard gapc${sus.length?' warn':''}"><div class="rc-head"><h3>價格資料檢查</h3><span>${sus.length?'⚠ 疑似未還原':n<60?'資料不足':'已還原／除權息'} · 單日 |漲跌| > 11% 偵測</span></div>${li.length?`<ul class="gapl">${li.join('')}</ul>`:''}${ex}<p class="rc-note sep">偵測規則：歷史收盤相鄰兩日變動超過 11%（台股漲跌幅限制為 ±10%），再與證交所 TWT49U／櫃買中心 exDailyQ 的除權息計算結果比對；標示為「疑似」不代表確定，也不是買賣建議。</p></div>`;}
+function chartNotes(H){   // 走勢圖卡片底部的小字備註：有除權還原／價格異常／資料不足時才出現，沒有內容回傳空字串
+  const g=H.gaps,adj=H.adjusted||[],n=H.rows.length,ev=g?g.ev:[],sus=ev.filter(e=>e.kind!=='ex'),exs=ev.filter(e=>e.kind==='ex'),N=[];
+  if(adj.length)N.push(`<div class="cnote">⚙ <b>已除權還原</b>：${adj.map(a=>`${dfmt(a.date)} 除權（前收 ${fmt(a.prevClose)} → 參考價 ${fmt(a.refPrice)}，還原因子 ${fmt(a.factor,4)}，來源${a.src}）`).join('；')}。除權日以前的價格已乘以還原因子、成交量除以還原因子，均線、量比與支撐壓力皆用還原價，與當時實際成交價不同。</div>`);
+  sus.forEach(e=>N.push(`<div class="cnote bad">⚠ <b>${dfmt(e.d)}</b> 單日 ${e.pct>0?'+':''}${fmt(e.pct,1)}%（${fmt(e.prev)} → ${fmt(e.c)}）：${e.kind==='unk'?'官方除權息資料當日取不到，無法確認；':'證交所／櫃買官方除權息資料查無該日的除權息參考價（或收盤偏離參考價逾 10.5%）；'}${e.big?'<b>疑似分割／減資／面額變更／未還原</b>':'超過 ±10% 漲跌幅限制，<b>疑似未還原或特殊事件</b>'}。</div>`));
+  if(exs.length)N.push(`<div class="cnote">ℹ ${exs.map(e=>`<b>${dfmt(e.d)}</b> 單日 ${fmt(e.pct,1)}%`).join('、')}：為官方除權息日（參考價 ${exs.map(e=>fmt(e.ref)).join('、')}），已含除息缺口，不視為異常；價格未做還原（還原僅限參考價／前收 ≤ 0.9 的重大除權）。</div>`);
+  if(g&&g.suspect){const m=H.ma60;N.push(`<div class="cnote${m==null?' bad':''}"><b>均線與 60 日高：</b>疑似事件日 ${dfmt(g.since)} 起共 ${g.nAfter} 日資料，MA5／MA20／MA60 與 60 日高只用事件日（含）之後的價格計算，不跨越跳空。${m==null?`MA60 需 60 日，事件後僅 ${g.nAfter} 日 → <b>資料不足，已隱藏 MA60</b>。`:`MA60（事件後 60 日）＝${fmt(m)}。`} 60 日高（事件後）＝${fmt(g.hi60)}${g.hi60raw!==g.hi60?`；不排除事件前資料則為 ${fmt(g.hi60raw)}（含未還原價格，不採用）`:''}。支撐與壓力價位帶仍由完整歷史推算、可能跨越事件日，僅供參考。</div>`);}
+  else if(n<60)N.push(`<div class="cnote"><b>資料不足：</b>目前僅 ${n} 個交易日的歷史資料，MA60 需至少 60 日，<b>已隱藏 MA60</b>${n<20?'（MA20 亦不足）':''}；新上市或剛納入歷史涵蓋的標的會隨每日累積自動補齊。</div>`);
+  if(!N.length)return '';
+  return `<div class="cnotes">${N.join('')}${sus.length||exs.length?'<div class="cnote-s">偵測規則：相鄰兩日收盤變動超過 11%（漲跌幅限制為 ±10%），與證交所 TWT49U／櫃買 exDailyQ 的除權息計算結果比對；標示「疑似」不代表確定，也不是買賣建議。</div>':''}</div>`;}
 function chartTop(H){
   const rows=H.rows;GS=H.gaps&&H.gaps.suspect?Math.max(0,rows.findIndex(r=>r[0]===H.gaps.since)):0;if(CT.code!==H.code)CT={code:H.code,n:Math.min(60,rows.length),sel:null};
   CT.n=Math.min(CT.n,rows.length);if(CT.sel!=null&&CT.sel<rows.length-CT.n)CT.sel=null;
@@ -388,10 +386,10 @@ async function pick(code){
   <div class="titleprice"><div><h2>${s.name} <button class="star" style="font-size:18px;color:${W().includes(code)?'#f0a020':'#b8c1cf'}" onclick="toggle('${code}');pick('${code}')">${W().includes(code)?'★':'☆'}</button></h2><p>資料日期 ${dfmt(s.date)}${META&&s.date!==(s.market==='上市'?META.twseDate:META.tpexDate)?'<span class="stalechip">此股資料日早於市場最新日</span>':''} · 來源：${s.src}</p></div>
   <div><strong>${fmt(close)}</strong><span class="${cls(s.change)}">${sg(s.change)}${fmt(s.change)} (${sg(s.change)}${fmt(s.change/(close-s.change)*100)}%)</span></div></div>
   <div class="metrics"><span>開盤<b>${fmt(s.open)}</b></span><span>最高<b>${fmt(s.high)}</b></span><span>最低<b>${fmt(s.low)}</b></span><span>成交量<b>${fmt(s.volume/1000,0)} 張</b></span><span>成交金額<b>${fmt(s.value/1e8)} 億</b></span></div>
-  <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${flagCard(s)}<div id="sl-verdict"></div>${grp('走勢圖與資料檢查','價格走到哪、這些價格資料可不可信')}`;
+  <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${flagCard(s)}<div id="sl-verdict"></div>${grp('走勢圖','日線收盤、均線、成交量')}`;
   if(H){html+=`<div class="chartpanel"><div id="ctop">${chartTop(H)}</div>
-  ${H.adjusted?`<div class="note2 adjnote">⚙ 已除權還原：${H.adjusted.map(a=>`${dfmt(a.date)} 除權（前收 ${fmt(a.prevClose)} → 參考價 ${fmt(a.refPrice)}，還原因子 ${fmt(a.factor,4)}，來源${a.src}）`).join('；')}。除權日以前的價格已乘以還原因子、成交量除以還原因子，均線、量比與支撐壓力皆用還原價；以下顯示的歷史價位與當時實際成交價不同。</div>`:''}<div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
-  ${gapCard(H)}${grp('價位怎麼看','支撐、壓力與位階在哪（觀察價位，非買賣建議）· 依 '+dfmt(H.date)+' 收盤')}`;
+  ${chartNotes(H)}<div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
+  ${grp('價位怎麼看','支撐、壓力與位階在哪（觀察價位，非買賣建議）· 依 '+dfmt(H.date)+' 收盤')}`;
   if(L){const cf=confluence(H,L);html+=posTrack(s,L)+lvcards(L,cf,close,H)+`<div id="rrbox">${L.support&&L.support.length?rrHtml(H,L,close):''}</div>`+`<p class="note2 disclaimer">支撐與壓力為本站依歷史價格結構自行計算的觀察價位，可能與其他網站不同，不是目標價或買賣建議。</p>`+(L.limits?`<p class="note2">漲跌停參考（依漲跌幅限制，非結構價位）：明日漲停 ${fmt(L.limits.up)} · 跌停 ${fmt(L.limits.down)}</p>`:'');}
   const P=H.patterns;if(P&&(P.trend||P.box)){const t=P.trend,b=P.box;html+=`<div class="rcard patt"><div class="rc-head"><h3>形態偵測<small>（觀察用）</small></h3><span>依 ${dfmt(H.date)} 收盤</span></div>
    ${t?`<div class="sector-line"><span>📈 上升趨勢線（近期低點墊高）</span><b class="${t.state==='守住'?'up':'down'}">${t.state}</b><strong>線約 ${fmt(t.lineToday)}</strong></div><p class="rc-note">近 ${t.sinceDays} 日內最近 3 個波段低點 ${t.points.map(p=>dfmt(p[0]).slice(5)+' '+fmt(p[1])).join(' → ')}，趨勢線每日約 ${t.slopePct>0?'+':''}${fmt(t.slopePct)}%；收盤距趨勢線 ${t.dist>0?'+':''}${fmt(t.dist,1)}%。</p>`:''}

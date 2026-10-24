@@ -285,7 +285,6 @@ html.m .sparks{grid-template-columns:1fr}
 .rrout b{font-size:19px}.rr-bad{color:#b3261e!important;font-weight:600}.rr-warn{color:#9a5b00!important}
 
 .gapl{list-style:none;margin:0 0 8px;padding:0;font-size:12.5px;line-height:1.6}.gapl li{padding:6px 10px;margin:4px 0;border-radius:6px;background:#f4f7fd}.gapl li.bad{background:#fdecea;color:#7a1f18}.gapl li.ok{background:#e9f6ef;color:#14603c}
-.gapc.warn .rc-head{background:#fdecea;border-left-color:#d63a2f}.gapc .rc-head h3{color:#8a2a22}
 
 /* 當沖輔助 */
 .fl.dtu{background:#fdecea;color:#b3261e;border-color:#f3b9b4}.fl.dtd{background:#e6f6ee;color:#16794a;border-color:#a9dcc6}.fl.dtl{background:#f1f3f7;color:#667085;border-color:#d9e0ee}
@@ -303,11 +302,9 @@ table.ov th:nth-child(12){text-align:left}
 #detail .rc-head h3,#detail .charttitle>b,#detail .card>h3{font-size:14px;font-weight:700;color:#1f3a8a}
 #detail .rc-head span,#detail .charttitle small{color:#8a95a7;font-size:11px}
 #detail .rc-head.sub{margin:18px 0 10px;padding:14px 0 6px;border-top:1px solid #e6ebf5;border-bottom:0}
-#detail .rcard.verdict .rc-head,#detail .gapc.warn .rc-head{background:none;border-left:0}
+#detail .rcard.verdict .rc-head{background:none;border-left:0}
 #detail .rcard.verdict .rc-head{border-bottom-color:#efdca6}
 #detail .verdict .rc-head h3{color:#7a5a10;font-size:14px}
-#detail .gapc.warn .rc-head h3{color:#8a2a22}
-#detail .gapc.warn .rc-head{border-bottom-color:#f3b9b4}
 html.m #detail .rc-head,html.m #detail .charttitle{margin:0 0 10px;padding:0 0 8px}
 html.m #detail .rc-head.sub{margin:16px 0 10px;padding:12px 0 6px}
 /* 走勢圖面板改成與其他子卡片同樣的卡片外觀 */
@@ -324,3 +321,7 @@ html.m #detail .chartpanel{padding:14px}
 #detail .lvrow strong{font-size:22px;line-height:1.2}
 #detail .lvrow>div:last-child em{white-space:nowrap}
 #detail .lvrow+.lvrow{margin-top:12px;padding-top:12px}
+
+/* 走勢圖卡片底部備註（除權還原／價格異常／資料不足；有內容才出現） */
+.cnotes{margin:10px 0 0}.cnote{background:#fff8e6;border-radius:6px;padding:6px 10px;margin:6px 0;font-size:11.5px;line-height:1.65;color:#6b5a2a}
+.cnote.bad{background:#fdecea;color:#8a2a22}.cnote b{font-weight:700}.cnote-s{font-size:10.5px;color:#98a2b3;margin:4px 0 0;line-height:1.6}
