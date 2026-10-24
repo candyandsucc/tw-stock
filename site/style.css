@@ -218,8 +218,8 @@ html.m .charttitle{padding:9px 12px}
 .etfcov{overflow-x:auto;-webkit-overflow-scrolling:touch}.etfcov table{min-width:560px}.etfcov td small{display:block;color:#98a2b3;font-size:10px;margin-top:3px}
 /* ETF 持有清單／ETF 頁／涵蓋範圍 */
 .etfwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:8px 0}
-.etfwrap table.etft{display:table!important;white-space:normal;min-width:700px;width:100%}
-.etfwrap table.cons{min-width:820px}
+.etfwrap table.etft{display:table!important;white-space:normal;min-width:560px;width:100%}
+.etfwrap table.cons{min-width:640px}
 .etft th.sk{cursor:pointer;user-select:none;white-space:nowrap}.etft th.sk i{font-style:normal;font-size:10px;color:#b0b9c9;margin-left:3px}.etft th.sk.on{color:#365fd2}.etft th.sk.on i{color:#365fd2}
 .etft td{vertical-align:top}.etft td b.up{color:#d4483b}.etft td b.down{color:#2c9a6f}
 .etft .act{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:9px;background:#efe9ff;color:#6b3fc7;font-size:10px;font-weight:600;vertical-align:middle}
@@ -236,3 +236,4 @@ html.m .etfwrap table.etft td:first-child,html.m .etfwrap table.etft th:first-ch
 .chip{display:inline-flex;flex-direction:column;padding:3px 8px;border-radius:6px;background:#f4f6fb;border:1px solid #e4e9f2;color:#4a5568;text-decoration:none;font-size:11px;line-height:1.4}
 .chip em{font-style:normal;color:#98a2b3;font-size:10px}.chip.bad{background:#fff4ec;border-color:#f3d6a4}.chip.bad em{color:#b54708}.chip.stale{background:#fff9e8;border-color:#f0dfa0}
 html.m .covrow{grid-template-columns:1fr}html.m .covrow .covn{display:inline}
+.etfwrap table.etft th,.etfwrap table.etft td{padding:8px 6px;font-size:12px}

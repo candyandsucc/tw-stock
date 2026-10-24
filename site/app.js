@@ -199,11 +199,11 @@ function etfHolders(s,E){
   return `<div class="rcard"><div class="rc-head"><h3>持有此股票的 ETF</h3><span>被 ${held.length} 檔 ETF 持有 · 其中主動式 ${act.length} 檔</span></div>
    <p class="rc-note">已接入 ${new Set(F.filter(f=>f.date).map(f=>f.issuer)).size} 家投信、${F.filter(f=>f.date).length} 檔 ETF 的官方持股，比對前一個揭露日的股數增減（漲紅跌綠）。${held.length?`本股在這些 ETF 的估算持有金額合計約 ${aumFmt(total)}${noAum?`（另有 ${noAum} 檔缺規模未計入）`:''}。`:''}沒接入的 ETF 無法判定，不代表沒持有。</p>
    <div class="tabs">${['全部','增加','減少'].map(t=>`<button data-t="${t}" class="${t===etfTab?'on':''}">${t}</button>`).join('')}<button id="etfAct" class="${etfAct?'on':''}" aria-pressed="${etfAct}">只看主動式 ETF</button><span>顯示 ${R.length} / ${all.length} 筆</span></div>
-   ${R.length?`<div class="etfwrap"><table class="etft"><tr><th>ETF / 投信 / 基準日</th>${sortTh('權重','w',etfSort)}${sortTh('持有張數','s',etfSort)}${sortTh('估算金額','a',etfSort)}${sortTh('增減張數 / 增減幅','d',etfSort)}<th>比較基準日</th></tr>${R.map(r=>`<tr><td><a href="#${r.fund}" class="etflink" data-go="${r.fund}">${r.fund} ${r.f.name}</a>${r.f.active?'<span class="act">主動式</span>':''}<small>${r.f.issuer} · 基準日 ${r.f.date}${r.f.stale?' · <b class="warn">沿用舊資料</b>':''} · <a href="${r.f.url}" target="_blank" rel="noreferrer">官網 ↗</a></small></td>
+   ${R.length?`<div class="etfwrap"><table class="etft"><tr><th>ETF / 投信 / 基準日</th>${sortTh('權重','w',etfSort)}${sortTh('持有張數','s',etfSort)}${sortTh('估算金額','a',etfSort)}${sortTh('增減張數 / 增減幅','d',etfSort)}</tr>${R.map(r=>`<tr><td><a href="#${r.fund}" class="etflink" data-go="${r.fund}">${r.fund} ${r.f.name}</a>${r.f.active?'<span class="act">主動式</span>':''}<small>${r.f.issuer} · 基準日 ${r.f.date}${r.f.prevDate?' · 比較 '+r.f.prevDate:''}${r.f.stale?' · <b class="warn">沿用舊資料</b>':''} · <a href="${r.f.url}" target="_blank" rel="noreferrer">官網 ↗</a></small></td>
    <td>${fmt(r.weight)}%<small>${r.prevWeight==null?'—':'前期 '+fmt(r.prevWeight)+'%（'+sg(r.weight-r.prevWeight)+fmt(r.weight-r.prevWeight)+'）'}</small></td>
    <td>${r.shares?fmt(r.shares/1000,3):'0'}<small>${r.shares?fmt(r.shares,0)+' 股':'已剔除'}</small></td>
    <td>${r.amt==null?'—':aumFmt(r.amt)}<small>${r.f.aum?'ETF 規模 '+aumFmt(r.f.aum):'未取得規模'}</small></td>
-   <td class="${cls(r.d)}">${dCell(r.shares,r.prevShares)}</td><td>${r.prevShares==null?'<b>首次收錄，待下一期</b>':r.f.prevDate}</td></tr>`).join('')}</table></div>`
+   <td class="${cls(r.d)}">${dCell(r.shares,r.prevShares)}</td></tr>`).join('')}</table></div>`
    :`<p class="rc-note">${all.length?'目前沒有符合此篩選的紀錄。':'在已成功取得的 ETF 名單中未找到本股；未接入或失敗的 ETF 無法判定。'}</p>`}
    <p class="rc-note">估算金額＝該 ETF 淨資產（投信官網公開，與持股同基準日）× 權重，是估算值，不是實際買進金額；抓不到規模的留空，不估造。股數增減含申購買回、股票分割與公司行動，不等於經理人主動買賣。預設按權重由高到低，可點欄位標題切換排序。</p></div>`;
 }
