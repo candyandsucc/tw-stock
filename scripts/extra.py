@@ -488,8 +488,245 @@ def metrics():
           items=items, note="distSupport＝收盤÷第一支撐帶上緣−1（%，負值＝已在帶內或跌破）；rr＝(第一壓力下緣−收盤)÷(收盤−停損)，停損＝第一支撐帶下緣×0.99；brk＝收盤高於前 10／20 日最高價；皆由站內歷史價量計算，非買賣建議"))
     print("metrics ok", len(items))
 
+# ============ 第二批（段二）：財報、股利／填息、估值歷史、集保大戶、當沖比 ============
+SNAP = ROOT / "snapshots"
+def _stockset():
+    return {x["code"]: x for x in json.loads((OUT / "stocks.json").read_text())["stocks"]}
+def _roc_iso(s):
+    s = str(s or "").strip()
+    return roc8(s) if re.match(r"^\d{6,7}$", s) else None
+
+def fin():
+    """營益分析（毛利率、營益率、淨利率：證交所 t187ap17_L、櫃買 187ap17_O）＋ 綜合損益表（EPS、淨利：t187ap06 各產業別）。單季資料；每個（年度,季別）存檔 snapshots/fin/，歷史從站台開始存檔後逐季累積。輸出 fin.json。"""
+    FD = SNAP / "fin"; FD.mkdir(parents=True, exist_ok=True)
+    st = _stockset(); per = {}   # (y,s) -> {code: dict}
+    def put(code, y, q, **kw):
+        if code in st and y and q: per.setdefault((int(y), int(q)), {}).setdefault(code, {}).update(kw)
+    a = get("https://openapi.twse.com.tw/v1/opendata/t187ap17_L"); b = get("https://www.tpex.org.tw/openapi/v1/mopsfin_187ap17_O")
+    if a is None and b is None: raise RuntimeError("營益分析兩來源皆取不到")
+    out_d = None
+    for r in a or []:
+        out_d = out_d or roc8(r.get("出表日期"))
+        put(str(r["公司代號"]).strip(), r.get("年度"), r.get("季別"), rev=num(r.get("營業收入(百萬元)")), gm=num(r.get("毛利率(%)(營業毛利)/(營業收入)")), om=num(r.get("營業利益率(%)(營業利益)/(營業收入)")), nm=num(r.get("稅後純益率(%)(稅後純益)/(營業收入)")))
+    for r in b or []:
+        out_d = out_d or roc8(r.get("Date"))
+        put(str(r["SecuritiesCompanyCode"]).strip(), r.get("Year"), r.get("季別"), rev=num(r.get("營業收入百萬元")), gm=num(r.get("毛利率")), om=num(r.get("營業利益率")), nm=num(r.get("稅後純益率")))
+    def g(r, *ks):
+        for k in ks:
+            if k in r: return r[k]
+        return None
+    fams = [("https://openapi.twse.com.tw/v1/opendata/t187ap06_L_%s", ("bd", "ci", "fh", "ins", "mim")),
+            ("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap06_O_%s", ("basi", "bd", "ci", "fh", "ins", "mim"))]
+    for url, fm in fams:
+        for f in fm:
+            j = get(url % f, tries=2); time.sleep(SLEEP)
+            for r in j or []:
+                code = str(g(r, "公司代號", "SecuritiesCompanyCode") or "").strip()
+                if not code: continue
+                ni = num(g(r, "淨利（淨損）歸屬於母公司業主", "淨利（損）歸屬於母公司業主", "淨利（淨損）歸屬於母公司業主"))
+                if ni is None: ni = num(g(r, "本期淨利（淨損）", "本期稅後淨利（淨損）"))
+                put(code, g(r, "年度", "Year"), g(r, "季別", "Season"), eps=num(g(r, "基本每股盈餘（元）")), ni=ni)
+    for (y, q), d in per.items():    # 逐季存檔（同一季重跑覆蓋）
+        (FD / f"{y}Q{q}.json").write_text(json.dumps(d, ensure_ascii=False, separators=(",", ":")))
+    items = {}
+    snaps = sorted((tuple(map(int, f.stem.split("Q"))), f) for f in FD.glob("*Q*.json"))
+    for (y, q), f in snaps:
+        for c, v in json.loads(f.read_text()).items():
+            items.setdefault(c, []).append([y + 1911, q, v.get("rev"), v.get("gm"), v.get("om"), v.get("nm"), v.get("eps"), v.get("ni")])
+    for c in items: items[c].sort(key=lambda r: (r[0], r[1]), reverse=True); items[c] = items[c][:12]
+    wjson("fin.json", dict(items=items, fields=["西元年", "季別", "營收(百萬元)", "毛利率%", "營益率%", "稅後淨利率%", "基本EPS(元)", "本期淨利(千元)"], asof=out_d, quarters=sorted({f"{y + 1911}Q{q}" for (y, q), _ in snaps}),
+          updated=now().isoformat(timespec="seconds"), note="單季數字（非累計）；官方彙總表只提供最新一季，本站自開始存檔起逐季累積，累積不足 4 季時不計近四季 EPS。",
+          sources=dict(twse="https://openapi.twse.com.tw/v1/opendata/t187ap17_L、t187ap06_L_*", tpex="https://www.tpex.org.tw/openapi/v1/mopsfin_187ap17_O、mopsfin_t187ap06_O_*")))
+    print("fin ok", len(items), "quarters", sorted(f"{y + 1911}Q{q}" for (y, q), _ in snaps), "asof", out_d)
+
+def _fnum(x):
+    v = num(x); return v if v is not None else 0.0
+def dividends():
+    """股利分派（證交所 t187ap45_L、櫃買 mopsfin_t187ap39_O）＋ 填息紀錄（證交所 TWT49U、櫃買 exDailyQ 的除權息前收盤價，對照本站歷史收盤）。輸出 div.json。"""
+    st = _stockset(); items = {}
+    a = get("https://openapi.twse.com.tw/v1/opendata/t187ap45_L")
+    for r in a or []:
+        c = str(r["公司代號"]).strip()
+        if c not in st: continue
+        cash = _fnum(r.get("股東配發-盈餘分配之現金股利(元/股)")) + _fnum(r.get("股東配發-法定盈餘公積發放之現金(元/股)")) + _fnum(r.get("股東配發-資本公積發放之現金(元/股)"))
+        stock = _fnum(r.get("股東配發-盈餘轉增資配股(元/股)")) + _fnum(r.get("股東配發-法定盈餘公積轉增資配股(元/股)")) + _fnum(r.get("股東配發-資本公積轉增資配股(元/股)"))
+        items.setdefault(c, dict(h=[], x=[]))["h"].append([int(r["股利年度"]) + 1911 if str(r["股利年度"]).isdigit() else None, _clean(r.get("股利所屬年(季)度") or "", 8), _clean(r.get("股利所屬期間"), 20), round(cash, 6), round(stock, 6),
+                _clean(r.get("決議（擬議）進度"), 10), roc8(r.get("股東會日期")) if r.get("股東會日期") else None, roc8(r.get("董事會（擬議）股利分派日")) if r.get("董事會（擬議）股利分派日") else None, num(r.get("本期淨利(淨損)(元)")), num(r.get("股東配發-股東配發之現金(股利)總金額(元)"))])
+    b = None
+    for k in range(4):
+        try:
+            with urllib.request.urlopen(urllib.request.Request("https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap39_O", headers=UA), timeout=120) as rr: b = json.loads(rr.read().decode("utf-8", "replace"))
+            break
+        except Exception as e: print("tpex ap39 retry", k, type(e).__name__, e); time.sleep(3 * (k + 1))
+    if b is None:    # 櫃買取不到：保留前次的上櫃股利資料
+        try:
+            for c, v in json.loads((OUT / "div.json").read_text())["items"].items():
+                if c not in items and st.get(c, {}).get("market") != "上市": items[c] = dict(h=v.get("h", []), x=[])
+        except Exception: pass
+    if a is None and b is None: raise RuntimeError("股利分派兩來源皆取不到")
+    for r in b or []:
+        c = str(r["公司代號"]).strip()
+        if c not in st: continue
+        cash = _fnum(r.get("股東配發內容-盈餘分配之現金股利(元/股)")) + _fnum(r.get("股東配發內容-法定盈餘公積、資本公積發放之現金(元/股)"))
+        stock = _fnum(r.get("股東配發內容-盈餘轉增資配股(元/股)")) + _fnum(r.get("股東配發內容-法定盈餘公積、資本公積轉增資配股(元/股)"))
+        items.setdefault(c, dict(h=[], x=[]))["h"].append([int(r["股利年度"]) + 1911 if str(r["股利年度"]).isdigit() else None, _clean(r.get("期別"), 8), None, round(cash, 6), round(stock, 6), "董事會通過", None, roc8(r.get("董事會決議通過股利分派日")) if r.get("董事會決議通過股利分派日") else None,
+                num(r.get("本期淨利(淨損)(元)")), num(r.get("股東配發內容-股東配發之現金(股利)總金額(元)"))])
+    for c, v in items.items():
+        uniq = {(h[0], h[1], h[2]): h for h in v["h"]}      # 同年度同期別只留一筆
+        v["h"] = sorted(uniq.values(), key=lambda h: (h[0] or 0, h[1]), reverse=True)[:10]
+    # 填息：除權息日（過去 150 天內）前收盤 vs 之後收盤
+    today = now().date(); y, m = (today - dt.timedelta(days=150)).year, (today - dt.timedelta(days=150)).month
+    evs = {}
+    while (y, m) <= (today.year, today.month):
+        import calendar as _cal
+        last = _cal.monthrange(y, m)[1]
+        j = get(f"https://www.twse.com.tw/rwd/zh/exRight/TWT49U?startDate={y}{m:02d}01&endDate={y}{m:02d}{last}&response=json", tries=2); time.sleep(SLEEP)
+        for r in (j or {}).get("data", []) if j and j.get("stat") == "OK" else []:
+            d = _roc_cn(r[0]); p0, p1 = num(r[3]), num(r[4])
+            if d and p0: evs.setdefault(r[1].strip(), []).append((d, p0, p1, str(r[6]).strip() if len(r) > 6 else ""))
+        j = get(f"https://www.tpex.org.tw/www/zh-tw/bulletin/exDailyQ?startDate={y}/{m:02d}/01&endDate={y}/{m:02d}/{last}&response=json", tries=2); time.sleep(SLEEP)
+        for r in ((j or {}).get("tables") or [{}])[0].get("data", []):
+            s_ = r[0].replace("/", ""); d = f"{int(s_[:-4]) + 1911}-{s_[-4:-2]}-{s_[-2:]}"; p0, p1 = num(r[3]), num(r[4])
+            if p0: evs.setdefault(r[1].strip(), []).append((d, p0, p1, str(r[8]).strip() if len(r) > 8 else ""))
+        m += 1
+        if m == 13: y, m = y + 1, 1
+    nfill = 0
+    for c, L in evs.items():
+        f = HIS / f"{c}.json"
+        if c not in st or not f.exists(): continue
+        rows = json.loads(f.read_text())["rows"]; dates = [r[0] for r in rows]
+        for d, p0, p1, typ in sorted(L):
+            if d < dates[0] or d > dates[-1]: continue
+            i = next(k for k, x in enumerate(dates) if x >= d)
+            fill = next((k for k in range(i, len(rows)) if rows[k][4] >= p0), None)
+            e = dict(d=d, p0=p0, ref=p1, typ=typ, last=rows[-1][4], lastd=dates[-1])
+            if fill is not None: e.update(fd=dates[fill], days=fill - i + 1)
+            else: e.update(gap=round((p0 / rows[-1][4] - 1) * 100, 2), days=len(rows) - i)
+            items.setdefault(c, dict(h=[], x=[]))["x"].append(e); nfill += 1
+    wjson("div.json", dict(items=items, updated=now().isoformat(timespec="seconds"), n=len(items), nEx=nfill,
+          note="現金股利＝盈餘分配＋公積發放（元/股）；配息率＝現金股利總額÷本期淨利（該筆公告內之數字，非 EPS 口徑，淨利為負不計）；填息＝除權息日起收盤價首次不低於除權息前收盤價（以本站歷史收盤對照，僅涵蓋有歷史資料且除權息日在歷史範圍內者）。",
+          sources=dict(twse="https://openapi.twse.com.tw/v1/opendata/t187ap45_L；https://www.twse.com.tw/zh/exRight/TWT49U.html", tpex="https://www.tpex.org.tw/openapi/v1/mopsfin_t187ap39_O；exDailyQ")))
+    print("dividends ok", len(items), "ex records", nfill)
+
+VAL_DAYS = 65
+def _tw_val(d):
+    j = get(f"https://www.twse.com.tw/rwd/zh/afterTrading/BWIBBU_d?date={d.replace('-', '')}&selectType=ALL&response=json", tries=2)
+    if not j or j.get("stat") != "OK": return None
+    return {r[0].strip(): [num(r[5]), num(r[3]), num(r[6])] for r in j["data"]}      # 本益比、殖利率、股價淨值比
+def _tp_val(d):
+    y, m, dd = d.split("-")
+    j = get(f"https://www.tpex.org.tw/www/zh-tw/afterTrading/peQryDate?date={y}/{m}/{dd}&id=&response=json", tries=2)
+    t = ((j or {}).get("tables") or [None])[0]
+    if not t or not t.get("data"): return None
+    return {r[0].strip(): [num(r[2]), num(r[5]), num(r[6])] for r in t["data"]}
+def valhist():
+    """估值歷史分位：證交所 BWIBBU_d、櫃買 peQryDate 逐日（官方「依日期查詢」）近 65 個交易日，逐日快取 snapshots/chips/val_*；之後每天只補新日。輸出 valhist.json（本益比／殖利率／淨值比的現值、分位、區間）。"""
+    meta = json.loads((OUT / "stocks.json").read_text())["meta"]
+    days = [r[0] for r in json.loads((HIS / "2330.json").read_text())["rows"]][-VAL_DAYS:]
+    if meta["twseDate"] and meta["twseDate"] not in days: days = (days + [meta["twseDate"]])[-VAL_DAYS:]
+    old_days = sorted({f.name.split("_")[1] for f in CACHE.glob("val_*.json")})   # 已存檔的更早日期持續保留，窗口逐日加長（上限 260 日）
+    days = sorted(set(days) | set(old_days))[-260:]
+    st = _stockset(); ser = {}; got = []
+    for d in days:
+        ok = False
+        for mk, fn in (("上市", _tw_val), ("上櫃", _tp_val)):
+            v = cached(f"val_{d}_{mk}.json", lambda: fn(d))
+            if v:
+                ok = True
+                for c, x in v.items():
+                    if c in st: ser.setdefault(c, {})[d] = x
+        if ok: got.append(d)
+    if not got: raise RuntimeError("估值逐日資料全數取不到")
+    def stat(vals):
+        a = [v for v in vals if v is not None]
+        if not a: return None
+        cur = vals[-1]
+        if cur is None: return dict(n=len(a), cur=None)
+        pct = sum(1 for v in a if v <= cur) / len(a) * 100
+        b = sorted(a); med = b[len(b) // 2] if len(b) % 2 else (b[len(b) // 2 - 1] + b[len(b) // 2]) / 2
+        return dict(n=len(a), cur=cur, pct=round(pct, 1), lo=min(a), med=round(med, 2), hi=max(a))
+    items = {}
+    for c, m in ser.items():
+        cols = [[m.get(d, [None] * 3)[k] if m.get(d) else None for d in got] for k in range(3)]
+        keep = (HIS / f"{c}.json").exists()
+        items[c] = dict(pe=stat(cols[0]), yd=stat(cols[1]), pb=stat(cols[2]), **({"s": [[None if v is None else round(v, 2) for v in col] for col in cols]} if keep else {}))
+    wjson("valhist.json", dict(days=got, items=items, minN=60, updated=now().isoformat(timespec="seconds"),
+          note="分位＝近期各交易日中，估值不高於今日者占比（0%＝區間最低、100%＝最高）；本益比為負或未列入的日子不計；起始窗口為官方逐日查詢可回補的近 65 個交易日，並自今日起每天繼續累積（上限 260 日），不足 60 個有效日時只標示資料不足、不顯示分位。",
+          sources=dict(twse="https://www.twse.com.tw/zh/trading/exchange/BWIBBU_d.html", tpex="https://www.tpex.org.tw/zh-tw/mainboard/trading/info/pe-ratio-daily.html")))
+    for f in CACHE.glob("val_*.json"):
+        if f.name.split("_")[1] not in set(days): f.unlink()
+    print("valhist ok", got[0], got[-1], len(got), "stocks", len(items))
+
+def tdcc():
+    """集保戶股權分散表（集保開放資料 1-5，每週）：大戶（>400 張）、千張大戶、散戶（≤10 張）持股比與人數；逐週存檔 snapshots/tdcc/ 累積趨勢。輸出 tdcc.json。"""
+    TD = SNAP / "tdcc"; TD.mkdir(parents=True, exist_ok=True)
+    st = _stockset()
+    req = urllib.request.Request("https://opendata.tdcc.com.tw/getOD.ashx?id=1-5", headers=UA)
+    with urllib.request.urlopen(req, timeout=120) as r: txt = r.read().decode("utf-8-sig", "replace")
+    rows = {}; date = None
+    for ln in txt.splitlines()[1:]:
+        p = ln.split(",")
+        if len(p) < 6: continue
+        d, c, lv = p[0], p[1].strip(), int(p[2]) if p[2].isdigit() else 0
+        if c not in st or not 1 <= lv <= 17: continue
+        date = d; rows.setdefault(c, {})[lv] = (int(p[3] or 0), int(p[4] or 0), float(p[5] or 0))
+    if not rows or not date: raise RuntimeError("集保股權分散表解析不到資料")
+    iso = f"{date[:4]}-{date[4:6]}-{date[6:]}"; cur = {}
+    for c, L in rows.items():
+        if 17 not in L: continue
+        big = sum(L.get(k, (0, 0, 0))[2] for k in (12, 13, 14, 15)); k1 = L.get(15, (0, 0, 0))[2]; rt = sum(L.get(k, (0, 0, 0))[2] for k in (1, 2, 3))
+        cur[c] = [round(big, 2), round(k1, 2), round(rt, 2), L[17][0], sum(L.get(k, (0, 0, 0))[0] for k in (12, 13, 14, 15)), L.get(15, (0, 0, 0))[0], [L.get(k, (0, 0, 0))[2] for k in range(1, 16)], [L.get(k, (0, 0, 0))[0] for k in range(1, 16)]]
+    (TD / f"{iso}.json").write_text(json.dumps({c: v[:6] for c, v in cur.items()}, separators=(",", ":")))
+    for f in sorted(TD.glob("*.json"))[:-26]: f.unlink()
+    trend = {}
+    for f in sorted(TD.glob("*.json")):
+        for c, v in json.loads(f.read_text()).items(): trend.setdefault(c, []).append([f.stem] + v)
+    wjson("tdcc.json", dict(date=iso, items=cur, trend={c: t for c, t in trend.items() if len(t) > 1 or True}, weeks=sorted(p.stem for p in TD.glob("*.json")), updated=now().isoformat(timespec="seconds"),
+          levels=["1–999 股", "1,000–5,000", "5,001–10,000", "10,001–15,000", "15,001–20,000", "20,001–30,000", "30,001–40,000", "40,001–50,000", "50,001–100,000", "100,001–200,000", "200,001–400,000", "400,001–600,000", "600,001–800,000", "800,001–1,000,000", "1,000,001 以上"],
+          note="大戶＝持股 400 張（400,001 股）以上；千張大戶＝1,000 張以上；散戶＝10 張（10,000 股）以下；比例為占集保庫存數；每週公布一次，趨勢自本站開始存檔起逐週累積。",
+          source="https://www.tdcc.com.tw/portal/zh/smWeb/qryStock（集保開放資料 https://opendata.tdcc.com.tw/getOD.ashx?id=1-5）"))
+    print("tdcc ok", iso, len(cur), "weeks", len(list(TD.glob('*.json'))))
+
+DT_DAYS = 20
+def _tw_dt(d):
+    j = get(f"https://www.twse.com.tw/rwd/zh/dayTrading/TWTB4U?date={d.replace('-', '')}&selectType=All&response=json", tries=2)
+    if not j or j.get("stat") != "OK" or len(j.get("tables", [])) < 2: return None
+    return {r[0].strip(): int(str(r[3]).replace(",", "") or 0) for r in j["tables"][1]["data"]}
+def _tp_dt(d):
+    y, m, dd = d.split("-")
+    j = get(f"https://www.tpex.org.tw/www/zh-tw/intraday/stat?date={y}/{m}/{dd}&type=Daily&response=json", tries=2)
+    if not j or len(j.get("tables", [])) < 2: return None
+    return {r[0].strip(): int(str(r[3]).replace(",", "") or 0) for r in j["tables"][1]["data"]}
+def daytrade():
+    """當沖比＝當日沖銷成交股數 ÷ 當日總成交股數（證交所 TWTB4U、櫃買 intraday/stat 個股當沖成交量；總量取本站逐日行情快照）。近 20 個交易日，逐日快取 snapshots/chips/dt_*。輸出 daytrade.json。"""
+    days = [r[0] for r in json.loads((HIS / "2330.json").read_text())["rows"]][-DT_DAYS:]
+    st = _stockset(); dtv = {}; vol = {}; got = []
+    for d in days:
+        ok = False
+        for mk, fn in (("上市", _tw_dt), ("上櫃", _tp_dt)):
+            v = cached(f"dt_{d}_{mk}.json", lambda: fn(d))
+            if v is not None:
+                ok = True
+                for c, x in v.items(): dtv.setdefault(c, {})[d] = x
+            sf = SNAP / f"{d}_{mk}.json"
+            if sf.exists():
+                for c, v2 in json.loads(sf.read_text()).items(): vol.setdefault(c, {})[d] = (v2[4] if isinstance(v2, list) and len(v2) > 4 else 0)
+        if ok: got.append(d)
+    if not got: raise RuntimeError("當沖成交量兩來源皆取不到")
+    items = {}
+    for c in st:
+        row = []
+        for d in got:
+            t = (dtv.get(c) or {}).get(d); v = (vol.get(c) or {}).get(d)
+            row.append(None if t is None or not v else round(min(t / v * 100, 100), 1))
+        if any(x is not None for x in row): items[c] = row
+    wjson("daytrade.json", dict(days=got, items=items, updated=now().isoformat(timespec="seconds"),
+          note="當沖比＝個股當日沖銷成交股數 ÷ 該股當日總成交股數；官方當沖統計只列有當沖成交的標的，未列者視為無當沖（不補 0）；總成交股數取本站逐日行情快照。",
+          sources=dict(twse="https://www.twse.com.tw/zh/trading/day-trading/twtb4u.html", tpex="https://www.tpex.org.tw/zh-tw/mainboard/trading/intraday/statistics.html")))
+    print("daytrade ok", got[0], got[-1], len(got), "stocks", len(items))
+
 def main(which="all"):
-    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, events=events, metrics=metrics)
+    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, events=events, metrics=metrics, fin=fin, dividends=dividends, valhist=valhist, tdcc=tdcc, daytrade=daytrade)
     for k, fn in steps.items():
         if which in ("all", k):
             try: fn()

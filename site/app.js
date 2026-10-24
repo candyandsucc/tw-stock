@@ -24,7 +24,7 @@ async function init(){
   fetch('data/calendar.json').then(r=>r.json()).then(c=>{CAL=c;dateBar();if(sel)render();}).catch(()=>{dateBar();});
   if(SC){const c=$('#covN');if(c)c.textContent='技術分析目前涵蓋 '+SC.meta.n+' 檔（資料日期 '+dfmt(SC.meta.date)+'）';}
   scrUI();dateBar();xfUI();
-  ['themes','metrics','events','news'].forEach((n,i)=>fetch('data/'+n+'.json').then(r=>r.json()).then(v=>{[v=>TH=v,v=>MT=v,v=>EV=v,v=>NW=v][i](v);if(n==='metrics'||n==='themes'){advUI();render();}if(sel&&(n==='events'))pick(sel);}).catch(()=>{}));
+  ['themes','metrics','events','news'].forEach((n,i)=>fetch('data/'+n+'.json').then(r=>r.json()).then(v=>{[v=>TH=v,v=>MT=v,v=>EV=v,v=>NW=v][i](v);if(n==='metrics'||n==='themes'){advUI();render();}if(n==='news'){try{xfUI();}catch(e){}render();}if(sel&&(n==='events'||n==='news'))pick(sel);}).catch(()=>{}));
   $('#upd').textContent=META.updated.replace('T',' ').slice(0,16)+' (台北)';
   $('#cTw').innerHTML=META.counts.twse+'<em> 檔</em>';$('#cTp').innerHTML=META.counts.tpex+'<em> 檔</em>';
   $('#dTw').textContent='交易日期 '+dfmt(META.twseDate);$('#dTp').textContent='交易日期 '+dfmt(META.tpexDate);
@@ -182,7 +182,7 @@ function flTags(c){const f=flOf(c);if(!f)return [];const t=[];
   if(f.g)t.push(['g',f.g,'櫃買中心：管理股票']);
   if(f.n)t.push(['n',`注意${f.n[0].c?'×'+f.n[0].c:''}`,f.n.map(n=>dfmt(n.d)+' '+n.t).join('；')]);
   return t;}
-const flHtml=c=>flTags(c).map(([k,l,tt])=>`<span class="fl ${k}" title="${tt.replace(/"/g,'&quot;')}">${l}</span>`).join('');
+const flHtml=c=>nwTag(c)+flTags(c).map(([k,l,tt])=>`<span class="fl ${k}" title="${tt.replace(/"/g,'&quot;')}">${l}</span>`).join('');
 function flagCard(s){const f=flOf(s.code);if(!FL)return '';
   if(!f)return `<div class="rcard flagc ok"><div class="rc-head"><h3>交易限制與警示</h3><span>${dfmt(FL.asof)} 官方資料</span></div><p class="rc-note" style="margin:0">此股在 ${dfmt(FL.asof)} 沒有處置、全額交割、管理股票或近 3 個公布日的注意股紀錄。<a href="https://www.twse.com.tw/zh/announcement/punish.html" target="_blank" rel="noreferrer">證交所公告 ↗</a></p></div>`;
   const nxt=typeof nextTDafter==='function'?nextTDafter(FL.asof):null;let o='';
@@ -206,6 +206,8 @@ const XFDEF=[
  {g:'當沖',id:'amp7',name:'振幅≥7%',title:'(最高−最低)÷前收 ≥ 7%',t:(c,x)=>{const d=dtOf(x);return !!(d&&d.amp>=7)}},
  {g:'當沖',id:'top100',name:'成交值前100',title:'當日全市場成交值前 100 名',t:(c,x)=>((vrank()[x.code]||{}).all||9999)<=100},
  {g:'當沖',id:'liq',name:'低量<500張',title:'成交量低於 500 張（流動性警示）',t:(c,x)=>{const d=dtOf(x);return !!(d&&(d.liq==='warn'||d.liq==='low'))}},
+ {g:'公告',id:'nw3',name:'近3日有重訊',title:'公開資訊觀測站重大訊息（本站自存檔日起累積）：最近 3 個存檔日內有發言',t:c=>nwRecent(c,3)>0},
+ {g:'公告',id:'nw30',name:'近30日有重訊',title:'最近 30 天內有重大訊息（只含本站存檔日之後）',t:c=>nwRecent(c,30)>0},
  {g:'籌碼',id:'fbuy3',name:'外資連買≥3日',title:'外資含最新日連續買超 ≥ 3 個交易日（T86／櫃買）',t:(c,x)=>csI(x,0)>=3},
  {g:'籌碼',id:'fsell3',name:'外資連賣≥3日',title:'外資含最新日連續賣超 ≥ 3 個交易日',t:(c,x)=>csI(x,0)<=-3},
  {g:'籌碼',id:'tbuy3',name:'投信連買≥3日',title:'投信含最新日連續買超 ≥ 3 個交易日',t:(c,x)=>csI(x,1)>=3},
@@ -388,7 +390,7 @@ async function pick(code){
   <div class="titleprice"><div><h2>${s.name} <button class="star" style="font-size:18px;color:${W().includes(code)?'#f0a020':'#b8c1cf'}" onclick="toggle('${code}');pick('${code}')">${W().includes(code)?'★':'☆'}</button></h2><p>資料日期 ${dfmt(s.date)}${META&&s.date!==(s.market==='上市'?META.twseDate:META.tpexDate)?'<span class="stalechip">此股資料日早於市場最新日</span>':''} · 來源：${s.src}</p></div>
   <div><strong>${fmt(close)}</strong><span class="${cls(s.change)}">${sg(s.change)}${fmt(s.change)} (${sg(s.change)}${fmt(s.change/(close-s.change)*100)}%)</span></div></div>
   <div class="metrics"><span>開盤<b>${fmt(s.open)}</b></span><span>最高<b>${fmt(s.high)}</b></span><span>最低<b>${fmt(s.low)}</b></span><span>成交量<b>${fmt(s.volume/1000,0)} 張</b></span><span>成交金額<b>${fmt(s.value/1e8)} 億</b></span></div>
-  <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${flagCard(s)}${evCard(s.code)}<div id="sl-verdict"></div>${grp('走勢圖','日線收盤、均線、成交量')}`;
+  <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${flagCard(s)}${evCard(s.code)}${newsCard(s)}<div id="sl-verdict"></div>${grp('走勢圖','日線收盤、均線、成交量')}`;
   if(H){html+=`<div class="chartpanel"><div id="ctop">${chartTop(H)}</div>
   ${chartNotes(H)}<div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
   ${grp('價位怎麼看','支撐、壓力與位階在哪（觀察價位，非買賣建議）· 依 '+dfmt(H.date)+' 收盤')}`;
@@ -399,9 +401,9 @@ async function pick(code){
    <p class="rc-note sep">形態為依歷史價量自動偵測的觀察標示，不是買賣訊號，也不預測突破方向；偵測規則見下方「計算方法與資料說明」。</p></div>`;}
   html+=riskHtml(code,H);
   }else html+=`<div class="card"><h3>價格走勢 / 支撐壓力<span>尚無歷史</span></h3><p class="note2">此股票目前不在每日歷史抓取範圍（主要成交金額前段＋預設清單），因此暫無走勢、均線與支撐壓力（資料不足）。系統每日累積收盤快照，資料足夠後會自動顯示。</p></div>`+grp('價位怎麼看','支撐、壓力與位階在哪（觀察價位，非買賣建議）')+riskHtml(code,null);
-  html+=grp('籌碼與資金','法人、融資券與 ETF 是在買還是在賣')+`<div id="sl-chips"><div class="empty">正在彙整法人與融資資料…</div></div>${s.etf?'<div id="etfpage"><div class="empty">正在載入 ETF 持股明細…</div></div>':''}<div id="sl-etf"></div>`+grp('基本面與產業','估值、營收與所屬產業的資金熱度')+`<div id="sl-fund"></div>`+grp('當沖輔助與資料說明','短線流動性、計算方法與資料來源')+`${dtCard(s)}<div id="sl-meth"></div>`;
+  html+=grp('籌碼與資金','法人、融資券與 ETF 是在買還是在賣')+`<div id="sl-chips"><div class="empty">正在彙整法人與融資資料…</div></div>${s.etf?'<div id="etfpage"><div class="empty">正在載入 ETF 持股明細…</div></div>':''}<div id="sl-etf"></div>`+grp('基本面與產業','估值、營收與所屬產業的資金熱度')+`<div id="sl-fund"></div>`+grp('當沖輔助與資料說明','短線流動性、計算方法與資料來源')+`${dtCard(s)}<div id="sl-dt"></div><div id="sl-meth"></div>`;
   $('#detail').innerHTML=html;bindRR();
-  const [C,E]=await Promise.all([CH||(CH=fetch('data/chips.json').then(r=>r.json())),EF||(EF=fetch('data/etf.json').then(r=>r.json())),FDp||(FDp=fetch('data/fund.json').then(r=>r.json()).then(v=>FD=v).catch(()=>null)),RVp||(RVp=fetch('data/rev.json').then(r=>r.json()).then(v=>RV=v).catch(()=>null)),CRp||(CRp=fetch('data/credit.json').then(r=>r.json()).then(v=>CR=v).catch(()=>null))]);
+  const [C,E]=await Promise.all([CH||(CH=fetch('data/chips.json').then(r=>r.json())),EF||(EF=fetch('data/etf.json').then(r=>r.json())),FDp||(FDp=fetch('data/fund.json').then(r=>r.json()).then(v=>FD=v).catch(()=>null)),RVp||(RVp=fetch('data/rev.json').then(r=>r.json()).then(v=>RV=v).catch(()=>null)),CRp||(CRp=fetch('data/credit.json').then(r=>r.json()).then(v=>CR=v).catch(()=>null)),p2load()]);
   if(sel!==code)return;CH_=C;if(s.etf){const p=$('#etfpage');if(p)p.innerHTML=fundOf(E,code)?etfPage(s,E):`<div class="rcard"><div class="rc-head"><h3>持股明細</h3><span>尚未接入</span></div><p class="rc-note">此 ETF 尚未接入官方持股揭露（見下方「資料涵蓋範圍」），暫無持股明細；不推定內容。</p></div>`;}
   fillResearch(s,H,C,E);bindResearch();
 }
@@ -415,7 +417,7 @@ function posTrack(s,L){const s1=L&&L.support[0],r1=L&&L.resistance[0],close=s.cl
   return `<div class="rcard postrack"><div class="rc-head"><h3>收盤在支撐與壓力之間的位置</h3><span>第一支撐 → 第一壓力</span></div><div class="track"><i style="left:${Math.max(0,Math.min(100,pos))}%"></i></div>
    <div class="pos3"><div><small>第一支撐</small><strong class="down">${fmt(s1.price)}</strong><em>價格帶 ${fmt(s1.low)}–${fmt(s1.high)}</em></div><div><small>收盤價</small><strong>${fmt(close)}</strong><em>位於區間 ${fmt(pos,1)}%</em></div><div><small>第一壓力</small><strong class="up">${fmt(r1.price)}</strong><em>價格帶 ${fmt(r1.low)}–${fmt(r1.high)}</em></div></div></div>`;}
 function fillResearch(s,H,C,E){const P=research(s,H,C,E),set=(id,h)=>{const e=$('#'+id);if(e)e.innerHTML=h;};
-  set('sl-verdict',P.verdict);set('sl-chips',P.inst+P.credit);set('sl-etf',P.etfh+P.etfc);set('sl-fund',P.fund);set('sl-meth',P.method);}
+  set('sl-verdict',P.verdict);set('sl-chips',P.inst+P.credit+tdccCard(s));set('sl-dt',dyCard(s));set('sl-etf',P.etfh+P.etfc);set('sl-fund',P.fund);set('sl-meth',P.method);}
 function research(s,H,C,E){
   const close=s.close;let o='';const P={};
   // 產業
@@ -432,7 +434,7 @@ function research(s,H,C,E){
   const fline=fd==null?'':`<li><b>${fd>=0?'外資買超':'外資賣超'}</b> 外資（含陸資、外資自營商）${dfmt(days.at(-1))} 合計 ${fmt(Math.abs(fd),0)} 張。</li>`;
   o+=`<div class="rcard verdict"><div class="rc-head"><h3>綜合判讀</h3><span>${dfmt(s.date)} 收盤</span></div><h4>${indName||(s.etf?'ETF':'產業資料待確認')}${rk?` · 同日成交金額第 ${rk} 名`:''}</h4><p>個股成交 ${fmt(s.value/1e8)} 億元。${D.length?`近 ${D.length} 日法人買超 ${buy} 日，合計 ${z(sum)} 張。`:'官方資料未提供此股票的法人買賣超。'}</p><ul class="vl">${vline}${fline}</ul></div>`;
   P.verdict=o;o='';
-  o+=fundHtml(s,H);
+  o+=fundHtml(s,H)+valCard(s)+finCard(s)+divCard(s);
   o+=`<div class="rcard"><div class="rc-head"><h3>產業熱度</h3><span>依官方產業分類</span></div>${indName?`<div class="sector-line"><span>${indName}</span><b>第 ${rk} / ${ranks.length}</b><strong>${fmt(agg[s.ind].v/1e8)} 億</strong></div>
    <p class="rc-note">${dfmt(s.date)} 同日已取得行情，分類內 ${agg[s.ind].n} 檔。排名依${s.market}成交金額，不代表資金淨流入。來源：${s.market==='上市'?'證交所 t187ap03_L':'櫃買中心 mopsfin_t187ap03_O'}（產業別）＋ 每日收盤行情。</p>`:`<p class="rc-note">官方資料未提供此證券的產業別（ETF 等不列入公司基本資料）。</p>`}
    ${themeCard(s.code)||'<p class="rc-note sep">此股票未歸入站內題材清單（題材為站內人工整理，非官方分類）。</p>'}</div>`;
@@ -776,3 +778,75 @@ Object.assign(SORTS,{
  'mt:r5':{f:x=>mv(x.code,'r5'),t:x=>`5 日 ${zp(mv(x.code,'r5'))}`},
  'mt:r20':{f:x=>mv(x.code,'r20'),t:x=>`20 日 ${zp(mv(x.code,'r20'))}`},
  'mt:b20':{f:x=>mv(x.code,'bias20'),t:x=>`乖離月線 ${zp(mv(x.code,'bias20'),1)}`}});
+
+
+/* ================= 第二批（段二）：重大訊息、財報、股利／填息、估值分位、集保大戶、當沖比 ================= */
+let FI=null,DV=null,VH=null,TD=null,DY=null,P2p=null;
+const p2load=()=>P2p||(P2p=Promise.all([['fin',v=>FI=v],['div',v=>DV=v],['valhist',v=>VH=v],['tdcc',v=>TD=v],['daytrade',v=>DY=v]].map(([n,f])=>fetch('data/'+n+'.json').then(r=>r.json()).then(f).catch(()=>null))));
+const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const nwSrc='<a href="https://mops.twse.com.tw/mops/web/t05sr01_1" target="_blank" rel="noreferrer">公開資訊觀測站 重大訊息 ↗</a>';
+const nwDays=()=>(NW&&NW.days||[]).slice().sort();
+function nwRecent(c,n){if(!NW||!NW.items[c])return 0;const D=nwDays();if(!D.length)return 0;
+  if(n<=3){const ok=new Set(D.slice(-n));return NW.items[c].filter(r=>ok.has(r[0])).length;}
+  const lim=new Date(Date.now()+8*3600e3-n*864e5).toISOString().slice(0,10);return NW.items[c].filter(r=>r[0]>=lim).length;}
+const nwTag=c=>{const k=nwRecent(c,3);return k?`<span class="fl nw" title="近 3 個存檔日內有 ${k} 則重大訊息（公開資訊觀測站）">重訊${k>1?'×'+k:''}</span>`:'';};
+function newsCard(s){if(!NW)return '';
+  const lim=new Date(Date.now()+8*3600e3-30*864e5).toISOString().slice(0,10),L=(NW.items[s.code]||[]).filter(r=>r[0]>=lim).slice().sort((a,b)=>(b[0]+b[1]).localeCompare(a[0]+a[1]));
+  const since=nwDays()[0];
+  const cover=`<p class="rc-note">涵蓋範圍：官方重大訊息介面只提供「當日」，本站從 ${dfmt(since)} 起每天存檔，因此只含此日之後的公告，較早的請至公開資訊觀測站查詢。來源：${nwSrc}。</p>`;
+  if(!L.length)return `<div class="rcard"><div class="rc-head"><h3>重大訊息</h3><span>近 30 日 · 0 則</span></div><p class="rc-note" style="margin:0">本站存檔中，近 30 日沒有 ${esc(s.name)} 的重大訊息。</p>${cover}</div>`;
+  return `<div class="rcard"><div class="rc-head"><h3>重大訊息</h3><span>近 30 日 · ${L.length} 則 · 公開資訊觀測站</span></div><div class="nwl">${L.slice(0,8).map(r=>`<div class="nwi"><div class="nwh"><b>${dfmt(r[0])}</b> <small>${esc(r[1]).replace(/^(\d\d)(\d\d)(\d\d)$/,'$1:$2')}</small>${r[3]?`<span class="tag">${esc(r[3])}</span>`:''}</div><div class="nws">${esc(r[2])}</div>${r[5]?`<details><summary>說明摘要</summary><p class="rc-note nwb">${esc(r[5])}${r[4]?`（事實發生日 ${dfmt(r[4])}）`:''}</p></details>`:''}</div>`).join('')}</div>${L.length>8?`<p class="rc-note">另有 ${L.length-8} 則較早的重大訊息未列出。</p>`:''}${cover}</div>`;}
+const Q_DL={1:[0,'05-15'],2:[0,'08-14'],3:[0,'11-14'],4:[1,'03-31']};
+function finCard(s){if(!FI)return '';const r=FI.items[s.code];
+  if(!r||!r.length){return s.etf?'':`<div class="rcard"><div class="rc-head"><h3>財報獲利</h3><span>官方資料 ${dfmt(FI&&FI.asof)}</span></div><p class="rc-note" style="margin:0">官方彙總表（營益分析、綜合損益表）未列入此股。<a href="https://mops.twse.com.tw/mops/web/t163sb04" target="_blank" rel="noreferrer">公開資訊觀測站 ↗</a></p></div>`;}
+  const [y,q,rev,gm,om,nm,eps]=r[0],pc=v=>v==null?'—':fmt(v,2)+'<em>%</em>',mk=(a,b)=>b===4?`${a+1}-03-31`:`${a}-${Q_DL[b][1]}`;
+  const dl=mk(y,q),nq=q===4?[y+1,1]:[y,q+1],ndl=nq[1]===4?`${nq[0]+1}-03-31`:`${nq[0]}-${Q_DL[nq[1]][1]}`;
+  const n4=r.filter((x,i)=>i<4&&x[6]!=null).length,seq=r.slice(0,4).every((x,i)=>i===0||(()=>{const p=r[i-1];return (p[0]*4+p[1])-(x[0]*4+x[1])===1;})());
+  const ttm=n4===4&&seq?r.slice(0,4).reduce((a,x)=>a+x[6],0):null;
+  return `<div class="rcard"><div class="rc-head"><h3>財報獲利 · ${y} 年第 ${q} 季</h3><span>單季 · 官方彙總表更新 ${dfmt(FI.asof)}</span></div>
+  <div class="m4"><div><small>每股盈餘 EPS</small><b class="${cls(eps)}">${eps==null?'—':fmt(eps,2)}<em> 元</em></b><small>單季（基本）</small></div><div><small>毛利率</small><b>${pc(gm)}</b><small>營業毛利 ÷ 營收</small></div><div><small>營益率</small><b class="${cls(om)}">${pc(om)}</b><small>營業利益 ÷ 營收</small></div><div><small>稅後淨利率</small><b class="${cls(nm)}">${pc(nm)}</b><small>營收 ${rev==null?'—':fmt(rev/1e2,2)} 億元</small></div></div>
+  <div class="kvl"><span>近四季 EPS 合計</span><b>${ttm!=null?fmt(ttm,2)+' 元':'累積中'}</b><strong>${ttm!=null?'':`已存 ${r.length} 季，滿 4 季起計算`}</strong></div>
+  <div class="kvl"><span>財報期別與申報期限</span><b>${y}Q${q} → ${dfmt(dl)}</b><strong>下一期 ${nq[0]}Q${nq[1]} 期限 ${dfmt(ndl)}</strong></div>
+  <p class="rc-note">期限為證交法規定的一般公司申報截止日（金融保險等行業期限不同，實際公告日以公開資訊觀測站為準）；官方彙總表不提供個股實際公告日，故這裡不標「公告日」。</p>
+  ${r.length>1?`<details><summary>已存檔的各季（${r.length} 季）</summary><table><tr><th>季別</th><th>EPS</th><th>毛利率</th><th>營益率</th><th>淨利率</th><th>營收（億）</th></tr>${r.map(x=>`<tr><td>${x[0]}Q${x[1]}</td><td>${fmt(x[6],2)}</td><td>${fmt(x[3],2)}%</td><td>${fmt(x[4],2)}%</td><td>${fmt(x[5],2)}%</td><td>${x[2]==null?'—':fmt(x[2]/1e2,2)}</td></tr>`).join('')}</table></details>`:''}
+  <p class="rc-note sep">${esc(FI.note)} 來源：證交所／櫃買中心 OpenAPI（t187ap17、t187ap06 系列，原始來源為公開資訊觀測站）；已存檔 ${FI.quarters.join('、')}。</p></div>`;}
+const cashS=v=>v==null?'—':fmt(v,4).replace(/0+$/,'').replace(/\.$/,'');
+function divCard(s){if(!DV)return '';const o=DV.items[s.code];
+  if(!o||(!o.h.length&&!o.x.length))return s.etf?'':`<div class="rcard"><div class="rc-head"><h3>股利與填息</h3><span>官方資料 ${dfmt((DV.updated||'').slice(0,10))}</span></div><p class="rc-note" style="margin:0">官方股利分派公告與近 5 個月除權息預告表皆未列入此股。</p></div>`;
+  const cnt={};o.h.forEach(h=>cnt[h[0]]=(cnt[h[0]]||0)+1);
+  const rows=o.h.slice(0,8).map(h=>{const pr=cnt[h[0]]===1&&h[8]>0&&h[9]>0?h[9]/h[8]*100:null;
+    return `<tr><td>${h[0]||'—'} <small>${esc(h[1]||'')}</small></td><td class="num"><b>${cashS(h[3])}</b></td><td class="num">${h[4]?cashS(h[4]):'—'}</td><td class="num">${pr==null?'—':fmt(pr,1)+'%'}</td><td><small>${h[7]?dfmt(h[7]):'—'}${h[5]?' · '+esc(h[5]):''}</small></td></tr>`;}).join('');
+  const last=o.h[0],y1=o.h.filter(h=>h[0]===(o.h[0]||[])[0]);
+  const fills=(o.x||[]).slice().sort((a,b)=>b.d.localeCompare(a.d));
+  const fl=fills.map(e=>`<tr><td>${dfmt(e.d)}</td><td>${esc(e.typ&&isNaN(e.typ)?e.typ:'除息')}</td><td class="num">${fmt(e.p0)}</td><td>${e.fd?`<b class="up">已填息</b> <small>${dfmt(e.fd)} · 第 ${e.days} 個交易日</small>`:`<b class="down">未填息</b> <small>收盤 ${fmt(e.last)} 仍較除權息前收盤低 ${fmt(e.gap,1)}% · 已 ${e.days} 個交易日</small>`}</td></tr>`).join('');
+  return `<div class="rcard"><div class="rc-head"><h3>股利與填息</h3><span>官方股利公告 · 填息對照本站歷史收盤</span></div>
+  ${o.h.length?`<div class="kvl"><span>最近一筆（${last[0]} ${esc(last[1]||'')}）</span><b>現金 ${cashS(last[3])} 元${last[4]?` ＋ 股票 ${cashS(last[4])} 元`:''}</b><strong>${last[7]?'董事會 '+dfmt(last[7]):''}</strong></div>
+  <details open><summary>股利歷史（${o.h.length} 筆）</summary><table><tr><th>年度／期別</th><th>現金（元/股）</th><th>股票（元/股）</th><th>配息率</th><th>董事會／進度</th></tr>${rows}</table>
+  <p class="rc-note">配息率＝該筆公告的現金股利總額 ÷ 公告列載的本期淨利；只對「該年度僅一筆」的公司計算（季配息或半年配的公司公告淨利口徑不一，不硬算）、淨利為負則不計，故多筆者顯示 —。股票股利以「元/股」計（面額 10 元，1 元＝每千股配 100 股）。</p></details>`:`<p class="rc-note" style="margin:0">官方股利分派公告未列入此證券（${s.etf?'ETF 配息請見投信公告':'可能尚未公告'}）。</p>`}
+  ${fills.length?`<div class="rc-head sub"><h3>填息紀錄 · 近 5 個月</h3><span>填息＝收盤價 ≥ 除權息前一日收盤</span></div><table class="fillt"><tr><th>除權息日</th><th>類別</th><th>除權息前收盤</th><th>結果</th></tr>${fl}</table>`:`<p class="rc-note">近 5 個月內此股沒有除權息紀錄（或無對應歷史收盤，無法比對）。</p>`}
+  <p class="rc-note sep">${esc(DV.note)} 來源：證交所 t187ap45_L／TWT49U、櫃買中心 mopsfin_t187ap39_O／exDailyQ。這些是歷史紀錄，不代表未來配息或填息。</p></div>`;}
+function valCard(s){if(!VH)return '';const o=VH.items[s.code];if(!o||(!o.pe&&!o.pb&&!o.yd))return '';
+  const N=VH.minN,days=VH.days,rng=`${dfmt(days[0])}–${dfmt(days.at(-1))}`;
+  const cell=(t,x,u,d)=>{if(!x||x.cur==null)return `<div><small>${t}</small><b>—</b><small>官方當日未列${x?`（有效 ${x.n} 日）`:''}</small></div>`;
+    const ok=x.n>=N;return `<div><small>${t}</small><b>${ok?fmt(x.pct,0)+'<em>%</em>':'—'}</b><small>${ok?'歷史分位':`資料不足（有效 ${x.n} 日，需 ${N} 日）`}</small><small>現值 ${fmt(x.cur,d)}${u}${ok?` · 區間 ${fmt(x.lo,d)}–${fmt(x.hi,d)}`:''}</small></div>`;};
+  const sp=o.s&&o.s[0]&&o.s[0].filter(v=>v!=null).length>=2?`<div class="sparks"><div><h5>本益比走勢（倍）</h5>${spark(o.s[0],days,v=>fmt(v,1),'#4a63c9')}</div><div><h5>股價淨值比走勢（倍）</h5>${spark(o.s[2],days,v=>fmt(v,2),'#8a6bc4')}</div></div>`:'';
+  return `<div class="rcard"><div class="rc-head"><h3>估值歷史分位</h3><span>${rng} · ${days.length} 個交易日</span></div>
+  <div class="m4 m3">${cell('本益比分位',o.pe,' 倍',2)}${cell('殖利率分位',o.yd,'%',2)}${cell('股價淨值比分位',o.pb,' 倍',2)}</div>${sp}
+  <p class="rc-note">分位是目前估值在自身近期歷史中的相對位置，不是買賣建議。${esc(VH.note)}</p>
+  <p class="rc-note">來源：<a href="${VH.sources.twse}" target="_blank" rel="noreferrer">證交所 BWIBBU_d ↗</a>、<a href="${VH.sources.tpex}" target="_blank" rel="noreferrer">櫃買中心 本益比日報 ↗</a>（官方計算值）。</p></div>`;}
+function tdccCard(s){if(!TD)return '';const r=TD.items[s.code];if(!r)return s.etf?'':`<div class="rcard"><div class="rc-head"><h3>集保大戶持股分級</h3><span>${dfmt(TD&&TD.date)}</span></div><p class="rc-note" style="margin:0">集保股權分散表未列入此證券。</p></div>`;
+  const tr=TD.trend[s.code]||[],prev=tr.length>1?tr[tr.length-2]:null,dd=(i,a,b)=>prev?` <small class="${cls(a-b)}">較上週 ${sgn(a-b,2)}</small>`:'',pn=prev?prev.slice(1):null;
+  const m=(t,v,i,u)=>`<div><small>${t}</small><b>${fmt(v,2)}<em>%</em></b>${pn?`<small class="${cls(v-pn[i])}">較 ${dfmt(prev[0])} ${sgn(v-pn[i],2)} 個百分點</small>`:`<small>${u}</small>`}</div>`;
+  const dist=r[6],mx=Math.max(...dist);
+  return `<div class="rcard"><div class="rc-head"><h3>集保大戶持股分級</h3><span>集保戶股權分散表 · 資料日 ${dfmt(TD.date)}（每週）</span></div>
+  <div class="m4">${m('大戶持股比',r[0],0,'持股 ≥ 400 張')}${m('千張大戶持股比',r[1],1,`${fmt(r[5],0)} 人`)}${m('散戶持股比',r[2],2,'持股 ≤ 10 張')}<div><small>集保股東人數</small><b>${fmt(r[3],0)}<em> 人</em></b>${pn?`<small class="${cls(r[3]-pn[3])}">較上週 ${sgn(r[3]-pn[3],0)} 人</small>`:`<small>大戶 ${fmt(r[4],0)} 人</small>`}</div></div>
+  ${pn?'':`<p class="rc-note">週變化：累積中。官方開放資料只提供最新一週，本站從 ${dfmt(TD.weeks[0])} 起每週存檔（目前 ${TD.weeks.length} 週），下週起顯示增減。</p>`}
+  <details><summary>15 級持股分級明細</summary><table class="tdt"><tr><th>持股（股）</th><th>人數</th><th>占集保庫存</th><th></th></tr>${dist.map((v,i)=>`<tr><td>${TD.levels[i]}</td><td class="num">${fmt(r[7][i],0)}</td><td class="num">${fmt(v,2)}%</td><td class="bcell"><i style="width:${mx?v/mx*100:0}%"></i></td></tr>`).join('')}</table></details>
+  <p class="rc-note sep">${esc(TD.note)} 來源：${esc(TD.source)}。大戶比高低只描述股權集中程度，不代表漲跌。</p></div>`;}
+function dyCard(s){if(!DY)return '';const r=DY.items[s.code],days=DY.days;
+  if(!r)return `<div class="rcard dtc"><div class="rc-head"><h3>當沖比</h3><span>近 ${days.length} 日</span></div><p class="rc-note" style="margin:0">官方當日沖銷統計近 ${days.length} 個交易日皆未列入此股，視為沒有當沖成交（不補 0）。</p></div>`;
+  const v=r.map(x=>x==null?0:x),last=v.at(-1),a5=v.slice(-5).reduce((a,b)=>a+b,0)/Math.min(5,v.length),a20=v.reduce((a,b)=>a+b,0)/v.length,mxI=v.indexOf(Math.max(...v));
+  return `<div class="rcard dtc"><div class="rc-head"><h3>當沖比</h3><span>${dfmt(days[0])}–${dfmt(days.at(-1))} · 證交所 TWTB4U／櫃買中心</span></div>
+  <div class="m4 m3"><div><small>最新（${dmd(days.at(-1))}）</small><b>${r.at(-1)==null?'—':fmt(last,1)+'<em>%</em>'}</b><small>當沖股數 ÷ 總成交股數</small></div><div><small>近 5 日平均</small><b>${fmt(a5,1)}<em>%</em></b><small>未列入日視為 0</small></div><div><small>近 ${days.length} 日平均</small><b>${fmt(a20,1)}<em>%</em></b><small>最高 ${fmt(v[mxI],1)}%（${dmd(days[mxI])}）</small></div></div>
+  <div class="sparks"><div><h5>當沖比走勢（%）</h5>${spark(v,days,x=>fmt(x,1)+'%','#c26a1c')}</div></div>
+  <p class="rc-note sep">${esc(DY.note)} 當沖比高代表短線換手快、波動可能放大，是資料特徵，不是買賣建議。</p></div>`;}
