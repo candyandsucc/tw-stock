@@ -253,3 +253,11 @@ html.m .cttip{font-size:11px;padding:6px 7px;min-width:118px}html.m .ctnote{disp
 html.m .cttip{position:static;left:auto!important;top:auto;max-width:none;min-width:0;margin-top:6px;display:none;grid-template-columns:1fr 1fr;gap:1px 18px;box-shadow:none;background:#f7f9fd}
 html.m .cttip[style*="block"]{display:grid!important}html.m .cttip .tt-d,html.m .cttip .tt-g{grid-column:1/-1}
 html.m .ma{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px}html.m .ma .mad{grid-column:1/-1}
+
+/* 資料日期／休市提示列 */
+.datebar{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;background:#f4f7fd;border:1px solid #dbe4f5;border-radius:10px;padding:9px 14px;margin:0 0 12px;font-size:12.5px;color:#46546f}
+.datebar .db-i{display:flex;flex-direction:column;line-height:1.35}.datebar small{color:#7f8ba0;font-size:11px}.datebar b{color:#1f2d4a;font-size:14px}.datebar em{font-style:normal;color:#7f8ba0;font-size:11px}
+.db-chip{border-radius:999px;padding:4px 11px;font-weight:600;font-size:12px}.db-chip.ok{background:#e6f6ee;color:#16794a}.db-chip.warn{background:#fff3dc;color:#9a5b00}.db-chip.bad{background:#fde7e5;color:#b3261e}
+.db-note{font-size:11px;color:#9a5b00}.db-src{margin-left:auto;font-size:11px;color:#98a2b3}.db-src a{color:#4871db}
+html.m .datebar{padding:8px 10px;gap:6px 12px}html.m .db-src{margin-left:0;flex-basis:100%}html.m .db-chip{flex-basis:100%;border-radius:8px}
+.listdate{font-size:11px;color:#7f8ba0;margin:2px 0 6px}.stalechip{display:inline-block;background:#fff3dc;color:#9a5b00;border-radius:999px;font-size:11px;padding:1px 8px;margin-left:6px;font-weight:600}

@@ -1,5 +1,5 @@
 <!DOCTYPE html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><meta name="viewport" id="vp" content="width=device-width,initial-scale=1">
-<title>台股研究室｜盤後觀察</title><link rel="stylesheet" href="style.css?v=xc1">
+<title>台股研究室｜盤後觀察</title><link rel="stylesheet" href="style.css?v=xd1">
 <script>(function(){var m='auto';try{m=localStorage.getItem('tw-viewmode')||'auto'}catch(e){}
 var mob=m==='mobile'||(m==='auto'&&matchMedia('(max-width:768px)').matches);
 if(mob)document.documentElement.classList.add('m');
@@ -17,6 +17,7 @@ if(m==='desktop'&&screen.width<=768)document.getElementById('vp').setAttribute('
 <header><span class="crumb">市場研究 › 盤後觀察</span><div class="vsw" id="vsw" role="group" aria-label="版面切換"><button data-vm="auto">自動</button><button data-vm="desktop">🖥 電腦版</button><button data-vm="mobile">📱 手機版</button></div><span class="badge">● 盤後資料 · 更新 <b id="upd">—</b></span></header>
 <div class="heading"><div><div class="eyebrow">YOUR DAILY MARKET PERSPECTIVE</div><h1>看懂價位，再做決定<span>。</span></h1><p>整理價量、觀察支撐壓力，建立自己的開盤參考。</p></div>
 <button class="refresh" onclick="location.reload()">↻ 更新行情</button></div>
+<div class="datebar" id="datebar" aria-live="polite"></div>
 <div class="overview">
 <div><small>上市市場</small><strong id="cTw">—<em> 檔</em></strong><span id="dTw">交易日期 —</span><span class="src">來源：證交所</span></div>
 <div><small>上櫃市場</small><strong id="cTp">—<em> 檔</em></strong><span id="dTp">交易日期 —</span><span class="src">來源：櫃買中心</span></div>
@@ -28,8 +29,9 @@ if(m==='desktop'&&screen.width<=768)document.getElementById('vp').setAttribute('
 <div class="filters"><button class="chosen" data-m="">全部</button><button data-m="上市">上市</button><button data-m="上櫃">上櫃</button><button data-m="ETF">ETF</button>
 <select id="sort"><option value="value">成交金額 ↓</option><option value="volume">成交量 ↓</option><option value="change">漲幅 ↓</option><option value="code">代號 ↑</option></select></div>
 <div class="scr" id="scr"></div>
+<div class="listdate" id="listdate"></div>
 <div class="tablehead"><span>股票 / 代號</span><span>收盤 / 漲跌</span></div>
 <div class="stocks" id="list"><div class="empty">正在載入證交所與櫃買中心資料…</div></div></section>
 <section class="detail" id="detail"><div class="empty">選擇一檔股票開始研究。</div></section></div>
 <button id="toTop" aria-label="回到頂部">↑</button><footer>台股研究室 <span>數據有依據，決策有自己的觀點。</span><small>僅供研究參考，非投資建議</small></footer>
-</main></div><script src="app.js?v=xc1"></script></body></html>
+</main></div><script src="app.js?v=xd1"></script></body></html>

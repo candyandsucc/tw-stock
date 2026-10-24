@@ -178,6 +178,7 @@ print("done", meta)
 # --- 產業別、三大法人近 20 日（上市+上櫃）、融資、ETF 持股 ---
 import sys; sys.path.insert(0, str(ROOT / "scripts"))
 import chips; chips.main()
+import extra; extra.main()      # 休市日程、處置注意標記、信用交易、外資持股比率（各項獨立失敗不影響其他）
 
 import summary; summary.main()   # 自選 25 檔一頁式總覽（site/data/watch25.json）
 import analytics; analytics.main()  # 情境篩選／位階／風險檢查（site/data/screen.json）

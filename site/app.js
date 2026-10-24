@@ -21,8 +21,9 @@ const dfmt=d=>d?d.replaceAll('-','/'):'—';
 async function init(){
   const [s,i,sc]=await Promise.all([fetch('data/stocks.json').then(r=>r.json()),fetch('data/institutional.json').then(r=>r.json()),fetch('data/screen.json').then(r=>r.json()).catch(()=>null)]);
   ALL=s.stocks;META=s.meta;INST=i;SC=sc;
+  fetch('data/calendar.json').then(r=>r.json()).then(c=>{CAL=c;dateBar();if(sel)render();}).catch(()=>{dateBar();});
   if(SC){const c=$('#covN');if(c)c.textContent='技術分析目前涵蓋 '+SC.meta.n+' 檔（資料日期 '+dfmt(SC.meta.date)+'）';}
-  scrUI();
+  scrUI();dateBar();
   $('#upd').textContent=META.updated.replace('T',' ').slice(0,16)+' (台北)';
   $('#cTw').innerHTML=META.counts.twse+'<em> 檔</em>';$('#cTp').innerHTML=META.counts.tpex+'<em> 檔</em>';
   $('#dTw').textContent='交易日期 '+dfmt(META.twseDate);$('#dTp').textContent='交易日期 '+dfmt(META.tpexDate);
@@ -43,6 +44,7 @@ function render(){
   const k=$('#sort').value;const pct=x=>x.change/(x.close-x.change);
   L=[...L].sort(k==='code'?(a,b)=>a.code.localeCompare(b.code):k==='change'?(a,b)=>pct(b)-pct(a):(a,b)=>(b[k]||0)-(a[k]||0));
   $('#listTitle').textContent={all:'全部股票',watch:'我的自選',etf:'ETF',w25:'全部股票'}[view];$('#listCount').textContent=L.length+' 檔';if(SC)scrStatus(L.length);
+  const ld=$('#listdate');if(ld)ld.innerHTML=`資料日期 上市 ${dfmt(META.twseDate)} · 上櫃 ${dfmt(META.tpexDate)}${META.twseDate!==META.tpexDate?' <span class="stalechip">兩市場資料日不同</span>':''}`;
   $('#list').innerHTML=L.slice(0,300).map(x=>`<div class="row ${x.code===sel?'sel':''}" data-c="${x.code}"><span class="star ${w.includes(x.code)?'on':''}" data-s="${x.code}">${w.includes(x.code)?'★':'☆'}</span>
   <div class="nm"><b>${x.name}</b><small>${x.code}<span class="tag">${x.market}${x.etf?' · ETF':''}</span>${ETFSET.has(x.code)?'<span class="tag hold">持股明細</span>':''}${SC&&SC.items[x.code]?` <span class="tier t${SC.items[x.code].tier}">${TIERS[SC.items[x.code].tier]}</span>`:(x.hasHistory?'':' <span title="尚無月歷史">◦</span>')}</small></div>
   <div class="px"><b>${fmt(x.close)}</b><small class="${cls(x.change)}">${sg(x.change)}${fmt(x.change)} (${sg(x.change)}${fmt(pct(x)*100)}%)</small></div></div>`).join('')||'<div class="empty">沒有符合的股票</div>';
@@ -71,6 +73,35 @@ async function overview(){
   <p class="note2">${bad.length?'資料提醒：'+bad.map(i=>`${i.name}（${i.issues.join('、')}）`).join('；')+'。':'25 檔皆具收盤行情、均線、量比與支撐壓力。'}</p>
   <p class="note2">法人買賣超＝外資＋投信＋自營商合計（千股換算張），來源證交所 T86／櫃買中心；形態為依歷史價量自動偵測的觀察標示，不預測突破方向。量比＝最新日成交量 ÷ 近 20 日均量。</p>`;
   box.querySelectorAll('tr[data-c]').forEach(r=>r.onclick=()=>{pick(r.dataset.c);toDetail();});
+}
+/* ===== 資料日期／休市提示（證交所 holidaySchedule 休市日程 + 資料推定的臨時休市） ===== */
+let CAL=null;const WKN=['日','一','二','三','四','五','六'];
+function tpNow(){const q=new URLSearchParams(location.search).get('_now');if(q&&/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(q))return {date:q.slice(0,10),min:+q.slice(11,13)*60+ +q.slice(14,16)};
+  const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).map(x=>[x.type,x.value]));
+  return {date:`${p.year}-${p.month}-${p.day}`,min:+p.hour*60+ +p.minute};}
+const wdOf=d=>new Date(d+'T00:00:00Z').getUTCDay();
+const addD=(d,n)=>new Date(new Date(d+'T00:00:00Z').getTime()+n*864e5).toISOString().slice(0,10);
+function closedWhy(d){const w=wdOf(d);if(CAL&&CAL.closed[d])return CAL.closed[d];if(CAL&&CAL.temp[d])return CAL.temp[d];if(w===0||w===6)return '週末';return null;}
+const isTD=d=>!closedWhy(d);
+const prevTD=d=>{let x=addD(d,-1);for(let i=0;i<30&&!isTD(x);i++)x=addD(x,-1);return x;};
+const nextTDafter=d=>{let x=addD(d,1);for(let i=0;i<30&&!isTD(x);i++)x=addD(x,1);return x;};
+const dw=d=>`${dfmt(d)}（${WKN[wdOf(d)]}）`;
+function dateBar(){
+  const el=$('#datebar');if(!el||!META)return;const n=tpNow(),td=n.date,dd=META.twseDate,dp=META.tpexDate;
+  const todayTD=isTD(td);const exp=todayTD&&n.min>=22*60+30?td:prevTD(td);
+  let nxt,nxtTag='';if(todayTD&&n.min<13*60+30){nxt=td;nxtTag='（今日，尚未收盤）';}else nxt=nextTDafter(td);
+  let chip,kind;
+  if(!todayTD){const why=closedWhy(td);if(dd===exp){chip=`休市（${why}）／資料沿用上一交易日 ${dfmt(dd)}`;kind='warn';}else{chip=`休市（${why}），且資料非最新交易日：應為 ${dfmt(exp)}，目前 ${dfmt(dd)}`;kind='bad';}}
+  else if(dd===td){chip='資料為今日收盤';kind='ok';}
+  else if(dd===exp&&n.min<22*60+30){chip=`今日盤後資料尚未更新（約 22:00 後），目前為上一交易日 ${dfmt(dd)}`;kind='warn';}
+  else{chip=`資料非最新交易日：應為 ${dfmt(exp)}，目前 ${dfmt(dd)}`;kind='bad';}
+  // 今日到下一個交易日之間的休市日（平日才列，說明原因）
+  const gaps=[];for(let x=addD(td,todayTD&&n.min<13*60+30?0:1);x<nxt&&gaps.length<8;x=addD(x,1)){const w=closedWhy(x);if(w&&w!=='週末')gaps.push(`${dfmt(x).slice(5)}（${WKN[wdOf(x)]}）${w}`);}
+  const yr=CAL&&Math.max(...CAL.years.map(Number));const beyond=yr&&+nxt.slice(0,4)>yr;
+  el.innerHTML=`<span class="db-i"><small>資料日期</small><b>${dw(dd)}</b><em>上市${dp&&dp!==dd?` · 上櫃 ${dfmt(dp)}`:' · 上櫃同日'}</em></span>
+   <span class="db-i"><small>下一個交易日</small><b>${dw(nxt)}${nxtTag}</b>${gaps.length?`<em>中間休市：${gaps.join('；')}</em>`:''}</span>
+   <span class="db-chip ${kind}">${chip}</span>${beyond?`<span class="db-note">休市日程只涵蓋 ${yr} 年，之後僅排除週末</span>`:''}
+   <span class="db-src">來源：<a href="${CAL?CAL.source:'#'}" target="_blank" rel="noreferrer">證交所休市日程 ↗</a>${CAL&&Object.keys(CAL.temp).length?' · 臨時休市由證交所無資料推定':''}</span>`;
 }
 let CT={code:null,n:60,sel:null};
 function dayStat(rows,j){
@@ -158,7 +189,7 @@ async function pick(code){
   const src=`<b>${s.src}</b>`;const inst=s.market==='上市'?(INST.data[code]||[]):null;
   const L=H&&H.levels,close=s.close;
   let html=`<div class="eyebrow">STOCK INSIGHT <span>${s.market}${s.etf?' · ETF':''} · ${code}</span></div>
-  <div class="titleprice"><div><h2>${s.name} <button class="star" style="font-size:18px;color:${W().includes(code)?'#f0a020':'#b8c1cf'}" onclick="toggle('${code}');pick('${code}')">${W().includes(code)?'★':'☆'}</button></h2><p>收盤日期 ${dfmt(s.date)} · 來源：${s.src}</p></div>
+  <div class="titleprice"><div><h2>${s.name} <button class="star" style="font-size:18px;color:${W().includes(code)?'#f0a020':'#b8c1cf'}" onclick="toggle('${code}');pick('${code}')">${W().includes(code)?'★':'☆'}</button></h2><p>資料日期 ${dfmt(s.date)}${META&&s.date!==(s.market==='上市'?META.twseDate:META.tpexDate)?'<span class="stalechip">此股資料日早於市場最新日</span>':''} · 來源：${s.src}</p></div>
   <div><strong>${fmt(close)}</strong><span class="${cls(s.change)}">${sg(s.change)}${fmt(s.change)} (${sg(s.change)}${fmt(s.change/(close-s.change)*100)}%)</span></div></div>
   <div class="metrics"><span>開盤<b>${fmt(s.open)}</b></span><span>最高<b>${fmt(s.high)}</b></span><span>最低<b>${fmt(s.low)}</b></span><span>成交量<b>${fmt(s.volume/1000,0)} 張</b></span><span>成交金額<b>${fmt(s.value/1e8)} 億</b></span></div>
   <div class="srcline">收盤行情 · 資料日期 ${dfmt(s.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY_ALL':'tpex_mainboard_daily_close_quotes'}）</div>${s.etf?'<div id="etfpage"><div class="empty">正在載入 ETF 持股明細…</div></div>':''}`;
