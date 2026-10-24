@@ -21,12 +21,13 @@ if(m==='desktop'&&screen.width<=768)document.getElementById('vp').setAttribute('
 <div><small>上市市場</small><strong id="cTw">—<em> 檔</em></strong><span id="dTw">交易日期 —</span><span class="src">來源：證交所</span></div>
 <div><small>上櫃市場</small><strong id="cTp">—<em> 檔</em></strong><span id="dTp">交易日期 —</span><span class="src">來源：櫃買中心</span></div>
 <div><small>我的觀察清單</small><strong id="cW">0<em> 檔</em></strong><span>點選星號加入 · 儲存於此瀏覽器</span></div>
-<div class="note"><span class="dot"></span><div><b>把數據變成觀察</b><p>資料每個交易日收盤後自動更新。<br>歷史走勢涵蓋主要個股，其餘逐日累積。</p></div></div></div>
+<div class="note"><span class="dot"></span><div><b>把數據變成觀察</b><p>資料每個交易日收盤後自動更新。<br><span id="covN">歷史走勢涵蓋主要個股</span>，其餘逐日累積。</p></div></div></div>
 <div class="workspace"><section class="listpanel">
 <div class="paneltitle"><h2 id="listTitle">全部股票</h2><span id="listCount"></span></div>
 <label class="search"><input id="q" placeholder="搜尋代號或名稱，例如 2330"></label>
 <div class="filters"><button class="chosen" data-m="">全部</button><button data-m="上市">上市</button><button data-m="上櫃">上櫃</button><button data-m="ETF">ETF</button>
 <select id="sort"><option value="value">成交金額 ↓</option><option value="volume">成交量 ↓</option><option value="change">漲幅 ↓</option><option value="code">代號 ↑</option></select></div>
+<div class="scr" id="scr"></div>
 <div class="tablehead"><span>股票 / 代號</span><span>收盤 / 漲跌</span></div>
 <div class="stocks" id="list"><div class="empty">正在載入證交所與櫃買中心資料…</div></div></section>
 <section class="detail" id="detail"><div class="empty">選擇一檔股票開始研究。</div></section></div>

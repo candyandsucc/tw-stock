@@ -180,3 +180,4 @@ import sys; sys.path.insert(0, str(ROOT / "scripts"))
 import chips; chips.main()
 
 import summary; summary.main()   # 自選 25 檔一頁式總覽（site/data/watch25.json）
+import analytics; analytics.main()  # 情境篩選／位階／風險檢查（site/data/screen.json）

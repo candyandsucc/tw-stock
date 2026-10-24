@@ -138,3 +138,38 @@ html.m #toTop{display:block;position:fixed;right:14px;bottom:16px;width:48px;hei
 html.m .vsw{flex:1 1 100%;width:100%}html.m .vsw button{white-space:nowrap}
 html.m .overview>div:nth-child(3){grid-column:1/-1}
 html.m #detail{scroll-margin-top:64px}
+/* ===== 情境篩選／位階／風險檢查／基本面 ===== */
+.scr{padding:6px 14px 10px;border-bottom:1px solid #edf0f6}
+.scr-h{display:flex;justify-content:space-between;align-items:baseline;margin:8px 0 6px}.scr-h b{font-size:12px;color:#44526b}.scr-h span{font-size:10px;color:#98a2b3}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{border:1px solid #dfe5ed;background:#fff;border-radius:16px;padding:5px 10px;font-size:12px;color:#55637a;display:inline-flex;align-items:center;gap:5px;line-height:1.2}
+.chips button em{font-style:normal;font-size:10px;background:#eef1f6;color:#667085;border-radius:9px;padding:1px 6px}
+.chips button.on{background:#365fd2;color:#fff;border-color:#365fd2}.chips button.on em{background:rgba(255,255,255,.25);color:#fff}
+.scr-st{display:none;justify-content:space-between;align-items:center;background:#edf2ff;color:#365fd2;border-radius:8px;padding:7px 10px;margin:8px 0 2px;font-size:12px}
+.scr-st button{color:#365fd2;font-weight:600;padding:4px 8px;border-radius:6px;background:#fff}
+.scr-def{margin-top:8px}.scr-def summary{margin-top:2px}.scr-def p,.scr-def dd,.scr-dl dd{font-size:11px;color:#6b778c;line-height:1.7;margin:2px 0 6px}
+.scr-def dt,.scr-dl dt{font-size:12px;font-weight:600;color:#44526b;margin-top:8px}.scr-def dl,.scr-dl{margin:6px 0 0}.scr-def dd,.scr-dl dd{margin-left:0}
+.tier{font-size:10px;border-radius:4px;padding:1px 5px;margin-left:4px;background:#eef1f6;color:#667085}
+.t1.tier,.tiers .t1{--c:#2a8fbd}.t2.tier,.tiers .t2{--c:#3d8f5f}.t3.tier,.tiers .t3{--c:#d9822b}.t4.tier,.tiers .t4{--c:#d4483b}.t0.tier,.tiers .t0{--c:#8a95a7}
+.tier{background:color-mix(in srgb,var(--c,#8a95a7) 14%,#fff);color:var(--c,#667085)}
+.tiers button{border-color:color-mix(in srgb,var(--c) 40%,#fff);color:var(--c)}.tiers button.on{background:var(--c);border-color:var(--c);color:#fff}
+.tiersteps{display:flex;gap:4px;margin:14px 0 4px}.tiersteps>div{flex:1;text-align:center}.tiersteps i{display:block;height:6px;border-radius:3px;background:#e4e9f2}
+.tiersteps small{display:block;font-size:11px;color:#98a2b3;margin-top:5px}
+.tiersteps .cur i{background:var(--c,#365fd2);height:8px}.tiersteps .cur small{color:#24324b;font-weight:600}
+.tiersteps .t0{--c:#8a95a7}.tiersteps .t1{--c:#2a8fbd}.tiersteps .t2{--c:#3d8f5f}.tiersteps .t3{--c:#d9822b}.tiersteps .t4{--c:#d4483b}
+.riskl{margin-top:12px}.rk{display:flex;gap:12px;align-items:flex-start;padding:10px 12px;border-radius:8px;margin-bottom:8px;border:1px solid #e8ecf3}
+.rk-s{flex:none;font-size:12px;font-weight:600;border-radius:12px;padding:3px 10px;white-space:nowrap}
+.rk.ok{background:#f3faf6}.rk.ok .rk-s{background:#dff3e8;color:#23805a}
+.rk.warn{background:#fff6e8;border-color:#f3d6a4}.rk.warn .rk-s{background:#ffe3b8;color:#a8570a}
+.rk b{font-size:13px;display:block}.rk small{display:block;color:#7f8ba0;font-size:11px;margin-top:2px;line-height:1.6}
+.warnc{color:#c26a0a}.okc{color:#23805a}
+.m4.m3{grid-template-columns:repeat(3,1fr)}
+.rc-head.sub{margin-top:18px;padding-top:14px;border-top:1px solid #edf0f6}
+.rvbars{display:flex;gap:4px;align-items:flex-end;height:140px;margin:12px 0 4px}
+.rvb{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end}
+.rvb i{display:block;width:70%;background:#9db6ee;border-radius:3px 3px 0 0}.rvb:last-child i{background:#365fd2}
+.rvb em{font-style:normal;font-size:10px;margin-bottom:3px;white-space:nowrap}.rvb small{font-size:10px;color:#98a2b3;margin-top:4px;white-space:nowrap}
+html.m .scr{padding:6px 12px 10px}html.m .chips button{min-height:40px;padding:6px 12px;font-size:13px}
+html.m .scr-st button{min-height:36px}html.m .rk{flex-direction:column;gap:6px}
+html.m .rvb em{font-size:9px}html.m .rvb small{font-size:9px}html.m .rvbars{gap:2px}
+html.m .m4.m3{grid-template-columns:1fr 1fr 1fr}html.m .m4.m3 b{font-size:17px}

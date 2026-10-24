@@ -13,14 +13,16 @@ $('#menuBtn').onclick=()=>{const o=$('#side').classList.toggle('open');$('#menuB
 $('#toTop').onclick=()=>scrollTo({top:0,behavior:'smooth'});
 matchMedia('(max-width:768px)').addEventListener('change',applyMode);applyMode();
 const toDetail=()=>{if(isM())setTimeout(()=>$('#detail').scrollIntoView({behavior:'smooth',block:'start'}),50);};
-let ALL=[],META={},INST={},view='all',mkt='',sel=null;
+let ALL=[],META={},INST={},view='all',mkt='',sel=null,SC=null,scF='',tierF=-1,FD=null,RV=null;
 const W=()=>JSON.parse(localStorage.getItem('tw-watch')||'["2330","0050"]');
 const setW=a=>{localStorage.setItem('tw-watch',JSON.stringify(a));render();};
 const toggle=c=>{const a=W();setW(a.includes(c)?a.filter(x=>x!==c):[...a,c]);};
 const dfmt=d=>d?d.replaceAll('-','/'):'—';
 async function init(){
-  const [s,i]=await Promise.all([fetch('data/stocks.json').then(r=>r.json()),fetch('data/institutional.json').then(r=>r.json())]);
-  ALL=s.stocks;META=s.meta;INST=i;
+  const [s,i,sc]=await Promise.all([fetch('data/stocks.json').then(r=>r.json()),fetch('data/institutional.json').then(r=>r.json()),fetch('data/screen.json').then(r=>r.json()).catch(()=>null)]);
+  ALL=s.stocks;META=s.meta;INST=i;SC=sc;
+  if(SC){const c=$('#covN');if(c)c.textContent='技術分析目前涵蓋 '+SC.meta.n+' 檔（資料日期 '+dfmt(SC.meta.date)+'）';}
+  scrUI();
   $('#upd').textContent=META.updated.replace('T',' ').slice(0,16)+' (台北)';
   $('#cTw').innerHTML=META.counts.twse+'<em> 檔</em>';$('#cTp').innerHTML=META.counts.tpex+'<em> 檔</em>';
   $('#dTw').textContent='交易日期 '+dfmt(META.twseDate);$('#dTp').textContent='交易日期 '+dfmt(META.tpexDate);
@@ -36,11 +38,12 @@ function render(){
   if(view==='watch')L=L.filter(x=>w.includes(x.code));if(view==='etf')L=L.filter(x=>x.etf);
   if(mkt==='ETF')L=L.filter(x=>x.etf);else if(mkt)L=L.filter(x=>x.market===mkt);
   if(q)L=L.filter(x=>x.code.toLowerCase().includes(q)||x.name.toLowerCase().includes(q));
+  if(SC&&(scF||tierF>=0))L=L.filter(x=>{const a=SC.items[x.code];return a&&(!scF||a.scen.includes(scF))&&(tierF<0||a.tier===tierF);});
   const k=$('#sort').value;const pct=x=>x.change/(x.close-x.change);
   L=[...L].sort(k==='code'?(a,b)=>a.code.localeCompare(b.code):k==='change'?(a,b)=>pct(b)-pct(a):(a,b)=>(b[k]||0)-(a[k]||0));
-  $('#listTitle').textContent={all:'全部股票',watch:'我的自選',etf:'ETF',w25:'全部股票'}[view];$('#listCount').textContent=L.length+' 檔';
+  $('#listTitle').textContent={all:'全部股票',watch:'我的自選',etf:'ETF',w25:'全部股票'}[view];$('#listCount').textContent=L.length+' 檔';if(SC)scrStatus(L.length);
   $('#list').innerHTML=L.slice(0,300).map(x=>`<div class="row ${x.code===sel?'sel':''}" data-c="${x.code}"><span class="star ${w.includes(x.code)?'on':''}" data-s="${x.code}">${w.includes(x.code)?'★':'☆'}</span>
-  <div class="nm"><b>${x.name}</b><small>${x.code}<span class="tag">${x.market}${x.etf?' · ETF':''}</span>${x.hasHistory?'':' <span title="尚無月歷史">◦</span>'}</small></div>
+  <div class="nm"><b>${x.name}</b><small>${x.code}<span class="tag">${x.market}${x.etf?' · ETF':''}</span>${SC&&SC.items[x.code]?` <span class="tier t${SC.items[x.code].tier}">${TIERS[SC.items[x.code].tier]}</span>`:(x.hasHistory?'':' <span title="尚無月歷史">◦</span>')}</small></div>
   <div class="px"><b>${fmt(x.close)}</b><small class="${cls(x.change)}">${sg(x.change)}${fmt(x.change)} (${sg(x.change)}${fmt(pct(x)*100)}%)</small></div></div>`).join('')||'<div class="empty">沒有符合的股票</div>';
   if(L.length>300)$('#list').insertAdjacentHTML('beforeend','<div class="empty">僅顯示前 300 檔，請用搜尋縮小範圍</div>');
   $('#list').querySelectorAll('.row').forEach(r=>r.onclick=e=>{if(e.target.dataset.s)toggle(e.target.dataset.s);else{pick(r.dataset.c);toDetail();}});
@@ -110,13 +113,14 @@ async function pick(code){
    ${t?`<div class="sector-line"><span>📈 上升趨勢線（近期低點墊高）</span><b class="${t.state==='守住'?'up':'down'}">${t.state}</b><strong>線約 ${fmt(t.lineToday)}</strong></div><p class="rc-note">近 ${t.sinceDays} 日內最近 3 個波段低點 ${t.points.map(p=>dfmt(p[0]).slice(5)+' '+fmt(p[1])).join(' → ')}，趨勢線每日約 ${t.slopePct>0?'+':''}${fmt(t.slopePct)}%；收盤距趨勢線 ${t.dist>0?'+':''}${fmt(t.dist,1)}%。</p>`:''}
    ${b?`<div class="sector-line"><span>▭ 整理平台（前 ${b.days} 日區間窄）</span><b>${b.state}</b><strong>${fmt(b.low)}–${fmt(b.high)}</strong></div><p class="rc-note">不含今日的前 ${b.days} 個交易日最高 ${fmt(b.high)}、最低 ${fmt(b.low)}，區間寬度 ${fmt(b.width,1)}%。</p>`:''}
    <p class="rc-note sep">形態為依歷史價量自動偵測的觀察標示，不是買賣訊號，也不預測突破方向；偵測規則見下方「計算方法與資料說明」。</p></div>`;}
-  }else html+=`<div class="card"><h3>價格走勢 / 支撐壓力<span>尚無歷史</span></h3><p class="note2">此股票目前不在每日歷史抓取範圍（主要成交金額前段＋預設清單），因此暫無走勢、均線與支撐壓力（資料不足）。系統每日累積收盤快照，資料足夠後會自動顯示。</p></div>`;
+  html+=riskHtml(code,H);
+  }else html+=`<div class="card"><h3>價格走勢 / 支撐壓力<span>尚無歷史</span></h3><p class="note2">此股票目前不在每日歷史抓取範圍（主要成交金額前段＋預設清單），因此暫無走勢、均線與支撐壓力（資料不足）。系統每日累積收盤快照，資料足夠後會自動顯示。</p></div>`+riskHtml(code,null);
   html+=`<div id="research"><div class="empty">正在彙整產業、法人、融資與 ETF 資料…</div></div>`;
   $('#detail').innerHTML=html;
   const [C,E]=await Promise.all([CH||(CH=fetch('data/chips.json').then(r=>r.json())),EF||(EF=fetch('data/etf.json').then(r=>r.json()))]);
   if(sel!==code)return;$('#research').innerHTML=research(s,H,C,E);bindResearch();
 }
-let CH=null,EF=null,etfTab='全部';
+let CH=null,EF=null,FDp=null,RVp=null,etfTab='全部';
 const IND={"01":"水泥工業","02":"食品工業","03":"塑膠工業","04":"紡織纖維","05":"電機機械","06":"電器電纜","07":"化學生技醫療","08":"玻璃陶瓷","09":"造紙工業","10":"鋼鐵工業","11":"橡膠工業","12":"汽車工業","14":"建材營造","15":"航運業","16":"觀光餐旅","17":"金融保險","18":"貿易百貨","19":"綜合","20":"其他","21":"化學工業","22":"生技醫療","23":"油電燃氣","24":"半導體業","25":"電腦及週邊設備","26":"光電業","27":"通信網路業","28":"電子零組件業","29":"電子通路業","30":"資訊服務業","31":"其他電子業","32":"文化創意業","33":"農業科技業","34":"電子商務","35":"綠能環保","36":"數位雲端","37":"運動休閒","38":"居家生活"};
 function vr20(rows){const v=rows.map(r=>r[5]||0);if(v.length<20)return '—';const a=v.slice(-20).reduce((x,y)=>x+y)/20;return a?fmt(v.at(-1)/a)+' 倍':'—';}
 const z=v=>v==null?'—':(v>0?'+':'')+fmt(v,1);
@@ -181,4 +185,48 @@ function research(s,H,C,E){
   return o;
 }
 function bindResearch(){document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{etfTab=b.dataset.t;const s=ALL.find(x=>x.code===sel);Promise.all([CH,EF]).then(([C,E])=>{$('#research').innerHTML=research(s,window._H,C,E);bindResearch();});});}
+/* ===== 情境篩選／位階分級／風險檢查／基本面（資料分類與觀察，非買賣建議） ===== */
+const TIERS=['線下整理','剛站回','爬坡中','噴出中','已飛天'];
+function scrUI(){
+  if(!SC){$('#scr').innerHTML='';return;}
+  const m=SC.meta,d=SC.defs;
+  $('#scr').innerHTML=`<div class="scr-h"><b>快速情境</b><span>目前涵蓋 ${m.n} 檔 · 資料日期 ${dfmt(m.date)}</span></div>
+  <div class="chips" id="scChips">${d.scen.map(x=>`<button data-sc="${x.id}" class="${scF===x.id?'on':''}" title="${x.short}">${x.name}<em>${m.counts[x.id]}</em></button>`).join('')}</div>
+  <div class="scr-h"><b>位階</b><span>收盤相對生命線（${m.lifeline}）</span></div>
+  <div class="chips tiers" id="tChips">${TIERS.map((n,i)=>`<button data-t="${i}" class="t${i} ${tierF===i?'on':''}">${n}<em>${m.tierCounts[i]}</em></button>`).join('')}</div>
+  <div class="scr-st" id="scSt"></div>
+  <details class="scr-def"><summary>查看情境與位階的判斷條件</summary>
+   <p><b>生命線</b>：${d.life}</p>
+   <dl>${d.scen.map(x=>`<dt>${x.name}</dt><dd>${x.rule}</dd>`).join('')}</dl>
+   <p><b>位階分級</b>：${d.tierRule}</p>
+   <p class="rc-note">涵蓋範圍：${m.n} 檔（站上已建立歷史價量者：自選＋成交值居前個股，每日由證交所 MI_INDEX、櫃買中心 dailyQuotes 收盤快照累積計算），其餘上市櫃股票尚未納入情境篩選。以上為依官方收盤價量與三大法人資料自行計算的「資料分類與觀察」，門檻為本站自訂，不是買賣建議，也不代表後續走勢。資料日期 ${dfmt(m.date)}。</p></details>`;
+  $('#scChips').querySelectorAll('button').forEach(b=>b.onclick=()=>{scF=scF===b.dataset.sc?'':b.dataset.sc;scrUI();render();});
+  $('#tChips').querySelectorAll('button').forEach(b=>b.onclick=()=>{const t=+b.dataset.t;tierF=tierF===t?-1:t;scrUI();render();});
+  scrStatus();
+}
+function scrStatus(n){
+  const el=$('#scSt');if(!el||!SC)return;
+  if(!scF&&tierF<0){el.innerHTML='';el.style.display='none';return;}
+  const nm=[scF&&SC.defs.scen.find(x=>x.id===scF).name,tierF>=0&&TIERS[tierF]].filter(Boolean).join(' ＋ ');
+  el.style.display='flex';el.innerHTML=`<span>篩選：<b>${nm}</b>${n==null?'':` · 符合 <b>${n}</b> 檔`}</span><button id="scClr">✕ 清除</button>`;
+  $('#scClr').onclick=()=>{scF='';tierF=-1;scrUI();render();};
+}
+function riskHtml(code,H){
+  const a=SC&&SC.items[code];
+  if(!a)return `<div class="rcard riskc"><div class="rc-head"><h3>風險檢查</h3><span>資料不足</span></div><p class="rc-note">此股票尚無足夠歷史價量（需至少 25 個交易日、且在本站技術分析涵蓋範圍內），暫無法自動檢查噴出段、三跳空、量價背離與融資暴增。</p></div>`;
+  const names=Object.fromEntries(SC.defs.risk.map(r=>[r.id,r])),w=a.risk.filter(r=>r.warn).length;
+  const sc=a.scen.map(id=>SC.defs.scen.find(x=>x.id===id).name);
+  const pos=`<div class="rcard"><div class="rc-head"><h3>位階分級</h3><span>依 ${dfmt(a.date)} 收盤 · 生命線＝${SC.meta.lifeline}</span></div>
+   <div class="tiersteps">${TIERS.map((n,i)=>`<div class="${i===a.tier?'cur t'+i:''}"><i></i><small>${n}</small></div>`).join('')}</div>
+   <div class="sector-line"><span>目前位階</span><b>${TIERS[a.tier]}</b><strong class="${cls(a.bias)}">乖離 ${a.bias>0?'+':''}${fmt(a.bias,1)}%</strong></div>
+   <p class="rc-note">收盤 ${fmt(a.close)}，生命線 MA20 ${fmt(a.life)}；${a.streak>0?`已連續 ${a.streak} 日收在生命線之上${a.crossed?'（由線下站回）':'（超出本站歷史範圍起算）'}`:'收盤在生命線之下'}。${a.drop<=-10?`近 60 日自高點最大回落 ${fmt(a.drop,1)}%。`:''}</p>
+   <p class="rc-note">${sc.length?`符合快速情境：${sc.map(n=>`<span class="pill ok">${n}</span>`).join('')}`:'目前未符合任何快速情境。'}</p>
+   <details><summary>位階與情境的判斷條件</summary><p class="rc-note">${SC.defs.tierRule}</p><dl class="scr-dl">${SC.defs.scen.map(x=>`<dt>${x.name}</dt><dd>${x.rule}</dd>`).join('')}</dl></details>
+   <p class="rc-note sep">分類為依官方收盤價量自行計算的資料分類與觀察，門檻為本站自訂，不是買賣建議。</p></div>`;
+  const risk=`<div class="rcard riskc"><div class="rc-head"><h3>風險檢查</h3><span>${w?`<b class="warnc">⚠ ${w} 項警示</b>`:'<b class="okc">✓ 4 項皆未偵測到</b>'} · 依 ${dfmt(a.date)} 收盤</span></div>
+   <div class="riskl">${a.risk.map(r=>`<div class="rk ${r.warn?'warn':'ok'}"><span class="rk-s">${r.warn?'⚠ 警示':'✓ 未偵測到'}</span><div><b>${names[r.id].name}</b><small>${r.text}</small></div></div>`).join('')}</div>
+   <details><summary>檢查條件（門檻為本站自訂）</summary><dl class="scr-dl">${SC.defs.risk.map(x=>`<dt>${x.name}</dt><dd>${x.rule}</dd>`).join('')}</dl></details>
+   <p class="rc-note sep">「未偵測到」只代表依上述條件未出現，不代表沒有風險；「警示」是資料特徵標示，不預測後續漲跌，也不是買賣建議。來源：證交所／櫃買中心收盤價量、融資餘額，資料日期 ${dfmt(a.date)}。</p></div>`;
+  return pos+risk;
+}
 init();
