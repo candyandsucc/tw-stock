@@ -160,6 +160,10 @@ for i, code in enumerate(targets):
     s["hasHistory"] = True
     print(i + 1, code, len(h))
 
+# --- 擴大技術分析涵蓋：成交值前 400 檔一般股，由每日全市場快照（MI_INDEX／dailyQuotes）建立歷史，不逐檔呼叫 STOCK_DAY ---
+import universe
+universe.main(stocks, EVENTS, now, skip=set(targets), prune=not ONLY)
+
 for _c, _s in stocks.items():  # 歷史檔已存在者一律標記（ONLY 補抓時不會遺失其他股票旗標）
     if (HIS / f"{_c}.json").exists(): _s["hasHistory"] = True
 meta = dict(updated=now, twseDate=twse_date, tpexDate=tpex_date, instDates=inst_dates,
