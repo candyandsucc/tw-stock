@@ -117,7 +117,7 @@ async function pick(code){
   }else html+=`<div class="card"><h3>價格走勢 / 支撐壓力<span>尚無歷史</span></h3><p class="note2">此股票目前不在每日歷史抓取範圍（主要成交金額前段＋預設清單），因此暫無走勢、均線與支撐壓力（資料不足）。系統每日累積收盤快照，資料足夠後會自動顯示。</p></div>`+riskHtml(code,null);
   html+=`<div id="research"><div class="empty">正在彙整產業、法人、融資與 ETF 資料…</div></div>`;
   $('#detail').innerHTML=html;
-  const [C,E]=await Promise.all([CH||(CH=fetch('data/chips.json').then(r=>r.json())),EF||(EF=fetch('data/etf.json').then(r=>r.json()))]);
+  const [C,E]=await Promise.all([CH||(CH=fetch('data/chips.json').then(r=>r.json())),EF||(EF=fetch('data/etf.json').then(r=>r.json())),FDp||(FDp=fetch('data/fund.json').then(r=>r.json()).then(v=>FD=v).catch(()=>null)),RVp||(RVp=fetch('data/rev.json').then(r=>r.json()).then(v=>RV=v).catch(()=>null))]);
   if(sel!==code)return;$('#research').innerHTML=research(s,H,C,E);bindResearch();
 }
 let CH=null,EF=null,FDp=null,RVp=null,etfTab='全部';
@@ -139,6 +139,7 @@ function research(s,H,C,E){
   const vline=vrv==null?'':`<li><b>${vrv<1?'成交量縮小':'成交量放大'}</b> 成交量約為近 20 日均量的 ${fmt(vrv)} 倍。</li>`;
   const fline=fd==null?'':`<li><b>${fd>=0?'外資買超':'外資賣超'}</b> 外資（含陸資、外資自營商）${dfmt(days.at(-1))} 合計 ${fmt(Math.abs(fd),0)} 張。</li>`;
   o+=`<div class="rcard verdict"><div class="rc-head"><h3>綜合判讀</h3><span>${dfmt(s.date)} 收盤</span></div><h4>${indName||(s.etf?'ETF':'產業資料待確認')}${rk?` · 同日成交金額第 ${rk} 名`:''}</h4><p>個股成交 ${fmt(s.value/1e8)} 億元。${D.length?`近 ${D.length} 日法人買超 ${buy} 日，合計 ${z(sum)} 張。`:'官方資料未提供此股票的法人買賣超。'}</p><ul class="vl">${vline}${fline}</ul></div>`;
+  o+=fundHtml(s,H);
   o+=`<div class="rcard"><div class="rc-head"><h3>產業熱度</h3><span>依官方產業分類</span></div>${indName?`<div class="sector-line"><span>${indName}</span><b>第 ${rk} / ${ranks.length}</b><strong>${fmt(agg[s.ind].v/1e8)} 億</strong></div>
    <p class="rc-note">${dfmt(s.date)} 同日已取得行情，分類內 ${agg[s.ind].n} 檔。排名依${s.market}成交金額，不代表資金淨流入。來源：${s.market==='上市'?'證交所 t187ap03_L':'櫃買中心 mopsfin_t187ap03_O'}（產業別）＋ 每日收盤行情。</p>`:`<p class="rc-note">官方資料未提供此證券的產業別（ETF 等不列入公司基本資料）。</p>`}
    <p class="rc-note sep">題材資金流（如 GaN）：尚無可驗證的題材名單及計算來源。</p></div>`;
@@ -228,5 +229,26 @@ function riskHtml(code,H){
    <details><summary>檢查條件（門檻為本站自訂）</summary><dl class="scr-dl">${SC.defs.risk.map(x=>`<dt>${x.name}</dt><dd>${x.rule}</dd>`).join('')}</dl></details>
    <p class="rc-note sep">「未偵測到」只代表依上述條件未出現，不代表沒有風險；「警示」是資料特徵標示，不預測後續漲跌，也不是買賣建議。來源：證交所／櫃買中心收盤價量、融資餘額，資料日期 ${dfmt(a.date)}。</p></div>`;
   return pos+risk;
+}
+function fundHtml(s,H){
+  const f=FD&&FD.items[s.code],d=FD&&FD.dates&&FD.dates[s.market],r=RV&&RV.items[s.code];
+  const adj=H&&H.adjusted&&H.adjusted.length?H.adjusted[H.adjusted.length-1]:null;
+  let o=`<div class="rcard fund"><div class="rc-head"><h3>基本面</h3><span>評價資料日期 ${d?dfmt(d):'—'}</span></div>`;
+  if(s.etf&&!f)o+=`<p class="rc-note">ETF 不列本益比、殖利率與月營收。</p>`;
+  else{
+   o+=f?`<div class="m4 m3"><div><small>本益比</small><b>${f[0]==null?'—':fmt(f[0],2)}</b><small>${f[0]==null?'官方未列（虧損或無資料）':'倍'}</small></div><div><small>殖利率</small><b>${f[1]==null?'—':fmt(f[1],2)+'<em>%</em>'}</b><small>${f[1]==null?'官方未列':'依最近一次股利'}</small></div><div><small>股價淨值比</small><b>${f[2]==null?'—':fmt(f[2],2)}</b><small>倍</small></div></div>`
+    :`<p class="rc-note">官方 ${s.market==='上市'?'BWIBBU_ALL':'本益比／殖利率'}資料未列入此證券。</p>`;
+   o+=`<p class="rc-note">來源：${s.market==='上市'?'證交所 OpenAPI BWIBBU_ALL':'櫃買中心 OpenAPI tpex_mainboard_peratio_analysis'}（官方計算值，本站不另行推估）。</p>`;
+   if(s.code==='6669')o+=`<div class="note2 adjnote">⚠ 緯穎 6669 於 2026-09-02 除權（官方前收 7,800 → 參考價 2,614.99），官方本益比與殖利率在除權前後的基準不一致（可能是除權後股價與未同步調整的每股盈餘、股利混算），數值明顯失真（目前顯示 ${f?fmt(f[0],2)+' 倍、'+fmt(f[1],2)+'%':'—'}，不宜直接引用），僅供參考；請以公司公告的每股盈餘與股利自行換算。</div>`;
+   else if(adj&&Date.now()-new Date(adj.date)<200*864e5)o+=`<div class="note2 adjnote">⚠ 本股於 ${dfmt(adj.date)} 有重大除權（還原因子 ${fmt(adj.factor,4)}），官方本益比、殖利率可能因股本變動而失真，僅供參考。</div>`;
+   if(r&&r.length){const mx=Math.max(...r.map(x=>x[1])),L=r[r.length-1],yo=v=>v==null?'—':(v>0?'+':'')+fmt(v,1)+'%';
+    o+=`<div class="rc-head sub"><h3>月營收 · 近 ${r.length} 個月</h3><span>最新 ${L[0]} · ${fmt(L[1]/1e5,2)} 億元</span></div>
+    <div class="rvbars">${r.map(x=>`<div class="rvb" title="${x[0]} 營收 ${fmt(x[1]/1e5,2)} 億元，年增 ${yo(x[2])}，月增 ${yo(x[3])}"><em class="${cls(x[2])}">${x[2]==null?'—':(x[2]>0?'+':'')+fmt(x[2],0)}</em><i style="height:${Math.max(3,x[1]/mx*92)}px"></i><small>${x[0].slice(2).replace('-','/')}</small></div>`).join('')}</div>
+    <p class="rc-note">長條＝當月營收，上方數字＝年增率（%）。最新月 ${L[0]}：營收 ${fmt(L[1]/1e5,2)} 億元，年增 <b class="${cls(L[2])}">${yo(L[2])}</b>，月增 <b class="${cls(L[3])}">${yo(L[3])}</b>。</p>
+    <details><summary>逐月明細與來源</summary><table><tr><th>月份</th><th>營收（億元）</th><th>年增</th><th>月增</th></tr>${r.slice().reverse().map(x=>`<tr><td>${x[0]}</td><td>${fmt(x[1]/1e5,2)}</td><td class="${cls(x[2])}">${yo(x[2])}</td><td class="${cls(x[3])}">${yo(x[3])}</td></tr>`).join('')}</table>
+    <p class="rc-note">來源：公開資訊觀測站「每月營業收入彙總表」（各公司申報，單位千元，換算為億元）；已涵蓋月份至 ${RV.latest}，次月 10 日前陸續公布。月營收未做除權還原，營收本身不受股票分割影響。</p></details>`;}
+   else o+=`<p class="rc-note">公開資訊觀測站月營收彙總表未列入此證券（或最近 12 個月無資料）。</p>`;
+  }
+  return o+`<p class="rc-note sep">本益比、殖利率、淨值比與營收為官方公告或官方計算的資料，用於資料分類與觀察，不是買賣建議。</p></div>`;
 }
 init();

@@ -181,3 +181,6 @@ import chips; chips.main()
 
 import summary; summary.main()   # 自選 25 檔一頁式總覽（site/data/watch25.json）
 import analytics; analytics.main()  # 情境篩選／位階／風險檢查（site/data/screen.json）
+import fundamentals                 # 本益比／殖利率／淨值比、近 12 個月月營收（site/data/fund.json、rev.json）
+try: fundamentals.main()
+except Exception as e: print("fundamentals failed（保留前次資料）:", e)
