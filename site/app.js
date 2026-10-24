@@ -178,7 +178,7 @@ function research(s,H,C,E){
    :`<p class="rc-note">${rows.length?'目前沒有符合此篩選的可比較紀錄。':'在已成功取得的 ETF 名單中未找到本股；未接入或失敗的 ETF 無法判定。'}</p>`}
    <details><summary>查看涵蓋清單與資料限制</summary><table><tr><th>ETF</th><th>發行</th><th>基準日</th><th>比較日</th><th>持股數</th></tr>${F.map(f=>`<tr><td><a href="${f.url}" target="_blank" rel="noreferrer">${f.code} ${f.name}</a></td><td>${f.issuer}</td><td>${f.date||'取得失敗'}</td><td>${f.prevDate||'—'}</td><td>${f.n}</td></tr>`).join('')}</table>
    <p class="rc-note">00981A、國泰、富邦及其他尚未列入的 ETF 未接入，不會推定為未持有。群益可回查前期，元大從首次成功收錄開始累積歷史；比較日不一定是前一交易日。股數變化包含申購買回、股票分割與公司行動，不等於經理人主動買賣。權重變化也受股價影響。資料每個交易日由排程自動更新。</p></details></div>`;
-  o+=`<details class="method"><summary>計算方法與資料說明</summary>
+  o+=`<details class="method"><summary>查看計算方法與資料說明</summary>
    <p>支撐壓力不是目標價、不是買賣建議，也不代表適合追價。價位全部來自真實歷史成交結構：近 120 個交易日的波段高低點（前後各 2 日確認）與量能K（成交量 ≥ 前 20 日均量 1.5 倍）的最高、最低價；高點被突破超過 1% 後不再當壓力；支撐被跌破時結構轉弱。相鄰結構落在同一波動容差（1.6%）內合併為同一價格帶，不硬拆兩區；價位皆依台股升降單位取整。支撐：現價下方 0～10% 標示近端、10～20% 標示中期、超過 20% 列為長期結構。支撐候選包含波段低點、缺口邊緣、MA5／MA20、近 20 日高低點與量能K。壓力：第一壓力帶之上的下一個獨立結構，若已超過 +10% 則保留、改標中期壓力。近 10 日高點落在第一壓力帶時，標為「關鍵突破／壓力共振區」。找不到真實結構就顯示「尚未形成」，不以公式補值；「資料不足」表示來源資料不足以計算。創新高時顯示明日漲停參考價（依漲跌幅限制，非結構價位）。</p>
    <p>量比＝最新日成交量 ÷ 近 20 日均量（含當日）。均線與走勢以歷史資料最後一日為準。重大除權（官方除權息參考價 ÷ 前收 ≤ 0.9，如股票分割）已依證交所 TWT49U／櫃買中心 exDailyQ 還原，一般現金股息（通常小於 5%）未還原，相關價位需另行判讀。</p><p>形態偵測：①上升趨勢線＝近 60 日內最近 3 個波段低點（前後各 2 日確認）依序墊高且首尾相距 ≥ 15 日，以最小平方法擬合，收盤距線 ≥ -1.5% 為守住、否則為跌破；②整理平台＝不含今日的前 N 日（N=20／15／10）最高最低價區間寬度 ≤ 12%（N=20）或 9%（N≤15），再依今日收盤標示平台內、突破上緣或跌破下緣。皆為觀察用標示，不是買賣訊號。</p>
    <p>資料來源：臺灣證券交易所 OpenAPI／網站資料（STOCK_DAY_ALL、STOCK_DAY、T86、MI_MARGN、t187ap03_L）與櫃買中心 OpenAPI／網站資料（每日收盤行情、個股日成交、三大法人、融資融券餘額、mopsfin_t187ap03_O）；ETF 持股取自元大投信、群益投信官網公開持股。法人單位為千股換算張，日期獨立標示。每個交易日 22:00（台北）自動更新。</p>
@@ -222,11 +222,11 @@ function riskHtml(code,H){
    <div class="sector-line"><span>目前位階</span><b>${TIERS[a.tier]}</b><strong class="${cls(a.bias)}">乖離 ${a.bias>0?'+':''}${fmt(a.bias,1)}%</strong></div>
    <p class="rc-note">收盤 ${fmt(a.close)}，生命線 MA20 ${fmt(a.life)}；${a.streak>0?`已連續 ${a.streak} 日收在生命線之上${a.crossed?'（由線下站回）':'（超出本站歷史範圍起算）'}`:'收盤在生命線之下'}。${a.drop<=-10?`近 60 日自高點最大回落 ${fmt(a.drop,1)}%。`:''}</p>
    <p class="rc-note">${sc.length?`符合快速情境：${sc.map(n=>`<span class="pill ok">${n}</span>`).join('')}`:'目前未符合任何快速情境。'}</p>
-   <details><summary>位階與情境的判斷條件</summary><p class="rc-note">${SC.defs.tierRule}</p><dl class="scr-dl">${SC.defs.scen.map(x=>`<dt>${x.name}</dt><dd>${x.rule}</dd>`).join('')}</dl></details>
+   <details><summary>查看位階與情境的判斷條件</summary><p class="rc-note">${SC.defs.tierRule}</p><dl class="scr-dl">${SC.defs.scen.map(x=>`<dt>${x.name}</dt><dd>${x.rule}</dd>`).join('')}</dl></details>
    <p class="rc-note sep">分類為依官方收盤價量自行計算的資料分類與觀察，門檻為本站自訂，不是買賣建議。</p></div>`;
   const risk=`<div class="rcard riskc"><div class="rc-head"><h3>風險檢查</h3><span>${w?`<b class="warnc">⚠ ${w} 項警示</b>`:'<b class="okc">✓ 4 項皆未偵測到</b>'} · 依 ${dfmt(a.date)} 收盤</span></div>
    <div class="riskl">${a.risk.map(r=>`<div class="rk ${r.warn?'warn':'ok'}"><span class="rk-s">${r.warn?'⚠ 警示':'✓ 未偵測到'}</span><div><b>${names[r.id].name}</b><small>${r.text}</small></div></div>`).join('')}</div>
-   <details><summary>檢查條件（門檻為本站自訂）</summary><dl class="scr-dl">${SC.defs.risk.map(x=>`<dt>${x.name}</dt><dd>${x.rule}</dd>`).join('')}</dl></details>
+   <details><summary>查看檢查條件（門檻為本站自訂）</summary><dl class="scr-dl">${SC.defs.risk.map(x=>`<dt>${x.name}</dt><dd>${x.rule}</dd>`).join('')}</dl></details>
    <p class="rc-note sep">「未偵測到」只代表依上述條件未出現，不代表沒有風險；「警示」是資料特徵標示，不預測後續漲跌，也不是買賣建議。來源：證交所／櫃買中心收盤價量、融資餘額，資料日期 ${dfmt(a.date)}。</p></div>`;
   return pos+risk;
 }
@@ -245,10 +245,38 @@ function fundHtml(s,H){
     o+=`<div class="rc-head sub"><h3>月營收 · 近 ${r.length} 個月</h3><span>最新 ${L[0]} · ${fmt(L[1]/1e5,2)} 億元</span></div>
     <div class="rvbars">${r.map(x=>`<div class="rvb" title="${x[0]} 營收 ${fmt(x[1]/1e5,2)} 億元，年增 ${yo(x[2])}，月增 ${yo(x[3])}"><em class="${cls(x[2])}">${x[2]==null?'—':(x[2]>0?'+':'')+fmt(x[2],0)}</em><i style="height:${Math.max(3,x[1]/mx*92)}px"></i><small>${x[0].slice(2).replace('-','/')}</small></div>`).join('')}</div>
     <p class="rc-note">長條＝當月營收，上方數字＝年增率（%）。最新月 ${L[0]}：營收 ${fmt(L[1]/1e5,2)} 億元，年增 <b class="${cls(L[2])}">${yo(L[2])}</b>，月增 <b class="${cls(L[3])}">${yo(L[3])}</b>。</p>
-    <details><summary>逐月明細與來源</summary><table><tr><th>月份</th><th>營收（億元）</th><th>年增</th><th>月增</th></tr>${r.slice().reverse().map(x=>`<tr><td>${x[0]}</td><td>${fmt(x[1]/1e5,2)}</td><td class="${cls(x[2])}">${yo(x[2])}</td><td class="${cls(x[3])}">${yo(x[3])}</td></tr>`).join('')}</table>
+    <details><summary>查看逐月明細與來源</summary><table><tr><th>月份</th><th>營收（億元）</th><th>年增</th><th>月增</th></tr>${r.slice().reverse().map(x=>`<tr><td>${x[0]}</td><td>${fmt(x[1]/1e5,2)}</td><td class="${cls(x[2])}">${yo(x[2])}</td><td class="${cls(x[3])}">${yo(x[3])}</td></tr>`).join('')}</table>
     <p class="rc-note">來源：公開資訊觀測站「每月營業收入彙總表」（各公司申報，單位千元，換算為億元）；已涵蓋月份至 ${RV.latest}，次月 10 日前陸續公布。月營收未做除權還原，營收本身不受股票分割影響。</p></details>`;}
    else o+=`<p class="rc-note">公開資訊觀測站月營收彙總表未列入此證券（或最近 12 個月無資料）。</p>`;
   }
   return o+`<p class="rc-note sep">本益比、殖利率、淨值比與營收為官方公告或官方計算的資料，用於資料分類與觀察，不是買賣建議。</p></div>`;
 }
+
+/* ===== 可展開區塊：統一成明顯的按鈕（原生 <details> 增強：aria-expanded、平滑展開、鍵盤可用） ===== */
+function upgradeDetails(root){
+  (root||document).querySelectorAll('details:not([data-xb])').forEach(d=>{
+    const s=d.querySelector(':scope>summary');if(!s)return;d.dataset.xb='1';
+    const label=s.textContent.trim();
+    s.classList.add('xbtn');s.setAttribute('role','button');s.setAttribute('tabindex','0');
+    s.innerHTML=`<span class="xi" aria-hidden="true">▼</span><span class="xt"></span>`;
+    const t=s.querySelector('.xt'),ic=s.querySelector('.xi');
+    const body=document.createElement('div');body.className='xbody';
+    const inner=document.createElement('div');inner.className='xinner';
+    [...d.childNodes].forEach(n=>{if(n!==s)inner.appendChild(n)});body.appendChild(inner);d.appendChild(body);
+    const set=o=>{s.setAttribute('aria-expanded',o?'true':'false');ic.textContent=o?'▲':'▼';t.textContent=o?'收合':label;};
+    set(d.open);if(d.open)body.style.height='auto';
+    s.addEventListener('click',e=>{
+      e.preventDefault();
+      const opening=!d.open;
+      if(window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches){d.open=opening;set(opening);body.style.height=opening?'auto':'0px';return;}
+      if(opening){d.open=true;set(true);const h=inner.offsetHeight;body.style.height='0px';body.offsetHeight;body.style.height=h+'px';
+        const end=()=>{body.style.height='auto';body.removeEventListener('transitionend',end)};body.addEventListener('transitionend',end);}
+      else{set(false);body.style.height=inner.offsetHeight+'px';body.offsetHeight;body.style.height='0px';
+        const end=ev=>{if(ev.propertyName!=='height')return;d.open=false;body.removeEventListener('transitionend',end)};body.addEventListener('transitionend',end);}
+    });
+    s.addEventListener('keydown',e=>{if(e.key===' '){e.preventDefault();s.click();}});
+  });
+}
+new MutationObserver(()=>upgradeDetails()).observe(document.body,{childList:true,subtree:true});
+upgradeDetails();
 init();
