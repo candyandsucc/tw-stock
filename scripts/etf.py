@@ -72,8 +72,25 @@ def xlsx_rows(b):
     finally: os.unlink(fn)
 
 # ---------- 各投信 ----------
+def yuanta_api(code):
+    """元大官方 API（etfapi.yuantaetfs.com，與官網頁面前端呼叫的同一個公開端點）：PCF/Daily。"""
+    u = ("https://etfapi.yuantaetfs.com/ectranslation/api/bridge?APIType=ETFAPI&CompanyName=YUANTAFUNDS"
+         f"&PageName=/product/detail/{code}/ratio&DeviceId=null&FuncId=PCF/Daily&AppName=ETF&Device=3&Platform=ETF&ticker={code}")
+    j = json.loads(curl(u, tries=2, timeout=40))
+    pcf, fw = j.get("PCF"), (j.get("FundWeights") or {}).get("StockWeights")
+    if not pcf or not fw: raise EtfError("元大 API 回應沒有持股資料")
+    d = str(pcf["trandate"])
+    hs = [hold(x["code"], x["name"], x["qty"], x["weights"]) for x in fw]
+    return dict(date=f"{d[:4]}-{d[4:6]}-{d[6:]}", aum=pcf.get("totalav"), holdings=[h for h in hs if twstock(h)])
+
 def yuanta(code, date=None):
-    b = curl(f"https://www.yuantaetfs.com/product/detail/{code}/ratio", tries=4, timeout=60, binary=True)
+    try: return yuanta_api(code)
+    except Exception as e: api_err = e
+    try: return yuanta_page(code)
+    except EtfError as e: raise EtfError(f"{e}（官方 API 也失敗：{api_err}）")
+
+def yuanta_page(code):
+    b = curl(f"https://www.yuantaetfs.com/product/detail/{code}/ratio", tries=2, timeout=60, binary=True)
     if len(b) < 20000: raise EtfError(f"元大頁面內容異常（{len(b)} bytes，可能被擋或改版）")
     p = subprocess.run(["node", str(ROOT / "scripts" / "yuanta_parse.js")], input=b, capture_output=True, timeout=60)
     try: j = json.loads(p.stdout)
@@ -351,18 +368,27 @@ def fetch_one(code, fn, arg, canhist, latest):
 def main():
     S = json.loads((OUT / "stocks.json").read_text())
     latest = S["meta"].get("twseDate") or dt.date.today().isoformat()
-    funds = []
+    funds = []; t0 = time.time(); blocked = {}  # blocked: 投信 -> 連續來源拒絕/連線失敗次數
     for code, name, issuer, url, fn, arg, canhist in FUNDS:
+        if blocked.get(issuer, 0) >= 2 or time.time() - t0 > 20 * 60:
+            # 同一投信已連續被來源拒絕，或整體耗時過長：本輪略過（第二輪再試），沿用舊快照
+            s_ = snaps(code); cur = json.loads(s_[-1].read_text()) if s_ else None
+            reason = "同投信前面連續被來源拒絕（HTTP/連線錯誤），本輪略過" if blocked.get(issuer, 0) >= 2 else "整體耗時超過 20 分鐘，本輪略過"
+            funds.append(dict(code=code, name=name, issuer=issuer, url=url, cur=cur, prev=(json.loads(s_[-2].read_text()) if len(s_) > 1 else None) if cur else None, ok=False, stale=bool(cur), reason=reason))
+            print("ETF", code, "SKIP", reason, flush=True); continue
         try: cur, prev, ok, reason, stale = fetch_one(code, fn, arg, canhist, latest)
         except Exception as e: cur = prev = None; ok = False; stale = False; reason = f"程式例外：{type(e).__name__}: {e}"
         print("ETF", code, "OK" if ok else ("STALE " if stale else "FAIL "), cur and cur["date"], reason or "", flush=True)
+        blocked[issuer] = 0 if ok else (blocked.get(issuer, 0) + 1 if reason and reason.startswith(("HTTP", "連線", "元大")) else blocked.get(issuer, 0))
         funds.append(dict(code=code, name=name, issuer=issuer, url=url, cur=cur, prev=prev, ok=ok, stale=stale, reason=reason))
         time.sleep(SLEEP)
     # 第二輪：本輪失敗者（多半是來源暫時性錯誤）隔一段時間再試一次
     bad = [i for i, f in enumerate(funds) if not f["ok"]]
     if bad:
-        time.sleep(30)
+        time.sleep(20)
+        blocked = {}
         for i in bad:
+            if time.time() - t0 > 35 * 60: break
             code, name, issuer, url, fn, arg, canhist = FUNDS[i]
             try: cur, prev, ok, reason, stale = fetch_one(code, fn, arg, canhist, latest)
             except Exception as e: continue
