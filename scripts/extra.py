@@ -781,6 +781,29 @@ def levelchips():
         except Exception as e: print("levelchips skip", f.name, e)
     print("levelchips ok", n)
 
+
+# ============ 價位每日留存（只存日期與價位帶，供日後對照守住率；不含任何個人資料） ============
+def levellog():
+    """每天把各檔第一支撐／第一壓力帶（低、高）連同收盤存進 snapshots/levellog.json（保留近 250 個交易日）。tools/levellog_eval.py 以隔日實際高低收評估守住率。"""
+    f = SNAP / "levellog.json"
+    try: log = json.loads(f.read_text())
+    except Exception: log = {}
+    day = None; cur = {}
+    for p in HIS.glob("*.json"):
+        try:
+            h = json.loads(p.read_text()); L = h.get("levels")
+            if not L or not h.get("rows"): continue
+            day = day or h["rows"][-1][0]
+            if h["rows"][-1][0] != day: continue
+            s = L["support"][0] if L.get("support") else None; r = L["resistance"][0] if L.get("resistance") else None
+            cur[h["code"]] = [h["rows"][-1][4], s and s["low"], s and s["high"], r and r["low"], r and r["high"], L.get("version")]
+        except Exception as e: print("levellog skip", p.name, e)
+    if day and cur:
+        log[day] = cur
+        for d in sorted(log)[:-250]: del log[d]
+        f.write_text(json.dumps(log, ensure_ascii=False, separators=(",", ":")))
+    print("levellog ok", day, len(cur))
+
 # ============ 階段4：長線體檢（純計算＋逐年累積，不連網；失敗由 main 容錯） ============
 def health():
     """長線體檢 → health.json。營收連續年增月數（rev.json，公開資訊觀測站月營收）、單季 EPS／毛利率（fin.json，官方彙總表只提供最新一季，逐季存檔累積）、
@@ -1054,7 +1077,7 @@ def hist52():
     print("hist52 ok", n, "skip", bad)
 
 def main(which="all"):
-    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, hist52=hist52, events=events, metrics=metrics, fin=fin, dividends=dividends, valhist=valhist, tdcc=tdcc, daytrade=daytrade, chipflags=chipflags, levelchips=levelchips, health=health, market=market, taifex=taifex, macro=macro)
+    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, hist52=hist52, events=events, metrics=metrics, fin=fin, dividends=dividends, valhist=valhist, tdcc=tdcc, daytrade=daytrade, chipflags=chipflags, levelchips=levelchips, levellog=levellog, health=health, market=market, taifex=taifex, macro=macro)
     for k, fn in steps.items():
         if which in ("all", k):
             try: fn()
