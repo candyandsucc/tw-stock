@@ -392,3 +392,11 @@ html.m table.lvt td{padding:0;border:0;text-align:left}html.m table.lvt td.num{t
 html.m table.lvt td:nth-child(5){grid-column:1 / -1}
 html.m table.lvt tr.curpx{display:block;padding:6px 8px;border:0}
 @media (min-width:769px){html:not(.m) #detail .levels.l3 .lvrow{grid-template-columns:1fr}html:not(.m) #detail .levels.l3 .lvrow>div:last-child{text-align:left;min-width:0}html:not(.m) #detail .levels.l3 .lvrow>div:last-child em{white-space:normal}}
+
+/* ===== xd22 籌碼重點整理與燈號 ===== */
+.lamp{display:inline-block;width:11px;height:11px;border-radius:50%;flex:none;vertical-align:-1px;margin-right:6px}
+.lamp.g{background:#2c9a6f}.lamp.y{background:#e8b020}.lamp.r{background:#d4483b}.lamp.n{background:#c4cbd8}
+.lampsum{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;margin:2px 0 10px}.lampsum .lamp{margin-right:5px}
+.flagtag{background:#fde4e1;color:#b3261e;border-radius:999px;padding:0 9px;font-weight:700;font-size:12px}
+.lamprow{display:grid;grid-template-columns:auto 76px 1fr;gap:4px 8px;align-items:start;padding:8px 0;border-top:1px solid #edf0f6;font-size:13px}.lamprow:first-child{border-top:0}.lamprow .lamp{margin:4px 0 0}.lamprow b{color:#46546f}.lamprow span{color:#5b667a;line-height:1.6}
+html.m .lamprow{grid-template-columns:auto 1fr}html.m .lamprow span{grid-column:1 / -1;padding-left:19px}

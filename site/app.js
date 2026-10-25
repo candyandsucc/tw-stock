@@ -169,6 +169,7 @@ const SORTS={
  'cs:use':{f:x=>csC(x,4),t:x=>`融資使用率 ${fmt(csC(x,4),1)}%`},
  'cs:m5':{f:x=>csC(x,2),t:x=>`融資 5 日 ${sgn(csC(x,2))} 張`},
  'cs:sh':{f:x=>csC(x,5),t:x=>`融券 ${fmt(csC(x,5),0)} 張`},
+ 'cs:ratio':{f:x=>{const m=csC(x,0),sh=csC(x,5);return m&&sh!=null?sh/m*100:null},t:x=>`券資比 ${fmt(csC(x,5)/csC(x,0)*100,2)}%`},
  'cs:sbl':{f:x=>csC(x,8),t:x=>`借券賣出 ${fmt(csC(x,8),0)} 張`},
  'cs:qf':{f:csQ,t:x=>`外資持股 ${fmt(csQ(x),2)}%`},
 };
@@ -211,6 +212,8 @@ const XFDEF=[
  {g:'籌碼',id:'fbuy3',name:'外資連買≥3日',title:'外資含最新日連續買超 ≥ 3 個交易日（T86／櫃買）',t:(c,x)=>csI(x,0)>=3},
  {g:'籌碼',id:'fsell3',name:'外資連賣≥3日',title:'外資含最新日連續賣超 ≥ 3 個交易日',t:(c,x)=>csI(x,0)<=-3},
  {g:'籌碼',id:'tbuy3',name:'投信連買≥3日',title:'投信含最新日連續買超 ≥ 3 個交易日',t:(c,x)=>csI(x,1)>=3},
+ {g:'籌碼',id:'sblacc',name:'借券賣壓累積',title:'借券賣出餘額 5 日增 ≥10%、增加量 ≥ 20 日均量 20%、20 日餘額也增（官方 TWT93U／櫃買）；沒有符合就是 0 檔',t:c=>!!(CF&&CF.items[c]&&CF.items[c].sblAcc)},
+ {g:'籌碼',id:'mhot',name:'融資追價過熱',title:'融資 5 日增 ≥8%、收盤 5 日漲 ≥3%、融資使用率 ≥10%；沒有符合就是 0 檔',t:c=>!!(CF&&CF.items[c]&&CF.items[c].mHot)},
  {g:'籌碼',id:'muse50',name:'融資使用率≥50%',title:'融資餘額 ÷ 融資限額 ≥ 50%',t:(c,x)=>csC(x,4)>=50},
 ];
 const xfPass=x=>!XF||XFDEF.find(d=>d.id===XF).t(x.code,x);
@@ -218,7 +221,7 @@ function xfUI(){const el=$('#xfbox');if(!el)return;const gs=[...new Set(XFDEF.ma
   el.innerHTML=gs.map(g=>`<div class="scr-h"><b>${g}</b><span>${g==='交易警示'&&FL?'資料 '+dfmt(FL.asof)+'（官方）':''}</span></div><div class="chips">${XFDEF.filter(d=>d.g===g).map(d=>`<button data-xf="${d.id}" class="${XF===d.id?'on':''}" title="${d.title}">${d.name}<em>${ALL.filter(x=>d.t(x.code,x)).length}</em></button>`).join('')}</div>`).join('');
   el.querySelectorAll('button').forEach(b=>b.onclick=()=>{XF=XF===b.dataset.xf?'':b.dataset.xf;xfUI();render();});}
 /* ===== 信用交易（融資／融券／借券賣出）與外資持股比率；籌碼摘要（連買連賣、5/20 日累計） ===== */
-let CS=null,CR=null,CRp=null;
+let CS=null,CR=null,CRp=null,CF=null;
 const sgn=(v,d=0)=>v==null?'—':(v>0?'+':'')+fmt(v,d);
 function spark(vals,days,fmtv,cl){const pts=vals.map((v,i)=>[i,v]).filter(p=>p[1]!=null);if(pts.length<2)return '<small>資料不足</small>';
   const w=300,h=54,p=4,mn=Math.min(...pts.map(x=>x[1])),mx=Math.max(...pts.map(x=>x[1])),X=i=>p+i*(w-2*p)/(vals.length-1),Y=v=>p+(h-2*p)*(1-(v-mn)/(mx-mn||1));
@@ -455,8 +458,16 @@ function posTrack(s,L){const s1=L&&L.support[0],r1=L&&L.resistance[0],close=s.cl
   const pos=(close-s1.price)/(r1.price-s1.price)*100;
   return `<div class="rcard postrack"><div class="rc-head"><h3>收盤在支撐與壓力之間的位置</h3><span>第一支撐 → 第一壓力</span></div><div class="track"><i style="left:${Math.max(0,Math.min(100,pos))}%"></i></div>
    <div class="pos3"><div><small>第一支撐</small><strong class="down">${fmt(s1.price)}</strong><em>價格帶 ${fmt(s1.low)}–${fmt(s1.high)}</em></div><div><small>收盤價</small><strong>${fmt(close)}</strong><em>位於區間 ${fmt(pos,1)}%</em></div><div><small>第一壓力</small><strong class="up">${fmt(r1.price)}</strong><em>價格帶 ${fmt(r1.low)}–${fmt(r1.high)}</em></div></div></div>`;}
+function chipSummary(s){
+  const o=CF&&CF.items&&CF.items[s.code];if(!o||!o.l)return '';
+  const nm={g:'綠',y:'黃',r:'紅',n:'灰'},c={g:0,y:0,r:0,n:0};o.l.forEach(x=>c[x[2]]++);
+  const flags=[o.sblAcc?'借券賣壓累積':'',o.mHot?'融資追價過熱':''].filter(Boolean);
+  return `<div class="rcard chipsum"><div class="rc-head"><h3>籌碼重點整理</h3><span>${dfmt(CF.asof)} · 官方資料</span></div>
+  <div class="lampsum">${['g','y','r','n'].filter(k=>c[k]).map(k=>`<span><i class="lamp ${k}"></i>${nm[k]}燈 ${c[k]}</span>`).join('')}${flags.map(f=>`<span class="flagtag">${f}</span>`).join('')}</div>
+  <div class="lamps">${o.l.map(x=>`<div class="lamprow"><i class="lamp ${x[2]}" title="${nm[x[2]]}燈"></i><b>${x[1]}</b><span>${esc(x[3])}</span></div>`).join('')}</div>
+  <p class="rc-note">${esc(CF.note||'')}</p></div>`;}
 function fillResearch(s,H,C,E){const P=research(s,H,C,E),set=(id,h)=>{const e=$('#'+id);if(e)e.innerHTML=h;};
-  set('sl-verdict',P.verdict);set('sl-chips',P.inst+P.credit+tdccCard(s));set('sl-dt',dyCard(s));set('sl-etf',P.etfh+P.etfc);set('sl-fund',P.fund);set('sl-meth',P.method);}
+  set('sl-verdict',P.verdict);set('sl-chips',chipSummary(s)+P.inst+P.credit+tdccCard(s));set('sl-dt',dyCard(s));set('sl-etf',P.etfh+P.etfc);set('sl-fund',P.fund);set('sl-meth',P.method);}
 function research(s,H,C,E){
   const close=s.close;let o='';const P={};
   // 產業
@@ -823,7 +834,7 @@ Object.assign(SORTS,{
 
 /* ================= 第二批（段二）：重大訊息、財報、股利／填息、估值分位、集保大戶、當沖比 ================= */
 let FI=null,DV=null,VH=null,TD=null,DY=null,P2p=null;
-const p2load=()=>P2p||(P2p=Promise.all([['fin',v=>FI=v],['futures',v=>FU=v],['div',v=>DV=v],['valhist',v=>VH=v],['tdcc',v=>TD=v],['daytrade',v=>DY=v]].map(([n,f])=>fetch('data/'+n+'.json').then(r=>r.json()).then(f).catch(()=>null))));
+const p2load=()=>P2p||(P2p=Promise.all([['fin',v=>FI=v],['futures',v=>FU=v],['div',v=>DV=v],['valhist',v=>VH=v],['tdcc',v=>TD=v],['daytrade',v=>DY=v],['chipflags',v=>CF=v]].map(([n,f])=>fetch('data/'+n+'.json').then(r=>r.json()).then(f).catch(()=>null))));
 const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const nwSrc='<a href="https://mops.twse.com.tw/mops/web/t05sr01_1" target="_blank" rel="noreferrer">公開資訊觀測站 重大訊息 ↗</a>';
 const nwDays=()=>(NW&&NW.days||[]).slice().sort();

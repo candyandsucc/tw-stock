@@ -204,3 +204,14 @@ def _compute(rows, close=None, params=None, detail=False):
                method="結構法 v2：前波高低點＋爆量K＋成交量密集區＋缺口＋均線＋整理平台，價格帶寬度依波動調整，同帶內不同依據越多共振越強")
     if detail: out["_cands"] = cands; out["_S"] = S; out["_R"] = R
     return out
+
+
+def add_chip_basis(L, sbl_acc, margin_hot):
+    """階段2：把籌碼旗標當作第一壓力帶的共振依據；回傳是否有更動。已加過的不重複加。"""
+    if not L or not L.get("resistance"): return False
+    b = L["resistance"][0]; ch = False
+    for flag, lab in ((sbl_acc, "借券賣壓累積"), (margin_hot, "融資追價過熱")):
+        if flag and lab not in b["basis"]: b["basis"].append(lab); ch = True
+    if ch:
+        b["n"] = len(b["basis"]); b["strength"] = strength(b["n"]); b["chip"] = True
+    return ch

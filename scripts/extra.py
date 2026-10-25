@@ -689,6 +689,98 @@ def tdcc():
           source="https://www.tdcc.com.tw/portal/zh/smWeb/qryStock（集保開放資料 https://opendata.tdcc.com.tw/getOD.ashx?id=1-5）"))
     print("tdcc ok", iso, len(cur), "weeks", len(list(TD.glob('*.json'))))
 
+# ============ 階段2：籌碼旗標與燈號（純計算，不連網；任何一步失敗都由 main 容錯，不影響每日更新） ============
+SBL_PCT, SBL_VOL, MH_PCT, MH_RET, MH_USE = 10.0, 0.2, 8.0, 3.0, 10.0   # 借券賣壓累積／融資追價過熱 門檻（嚴格，沒達標就不標）
+def chipflags():
+    """由 credit.json、chipsum.json、tdcc.json 與歷史價量，算出每檔的「借券賣壓累積」「融資追價過熱」旗標與籌碼燈號 → chipflags.json。
+    借券賣壓累積＝借券賣出餘額 5 日增加 ≥10%、增加量 ≥ 20 日均量 20%、且 20 日餘額也增加；
+    融資追價過熱＝融資餘額 5 日增加 ≥8%、收盤 5 日漲幅 ≥3%、融資使用率 ≥10%。燈號：綠＝偏穩／偏多、黃＝留意／分歧、紅＝警示／偏空、灰＝無資料；都是觀察標示，不是買賣訊號。"""
+    cr = json.loads((OUT / "credit.json").read_text()); cs = json.loads((OUT / "chipsum.json").read_text())["items"]
+    td = json.loads((OUT / "tdcc.json").read_text()) if (OUT / "tdcc.json").exists() else {"trend": {}, "weeks": []}
+    days = cr["days"]; items = {}; nS = nM = 0
+    f1 = lambda v, d=1: "—" if v is None else f"{v:,.{d}f}"
+    sg = lambda v, d=0: "—" if v is None else f"{v:+,.{d}f}"
+    codes = set(cs) | set(cr["data"]) | set(td["trend"])
+    for code in codes:
+        hp = HIS / f"{code}.json"
+        try: rows = json.loads(hp.read_text())["rows"] if hp.exists() else None
+        except Exception: rows = None
+        o = {}; lights = []
+        c = (cs.get(code) or {}); i, cc, q = c.get("i"), c.get("c"), c.get("q")
+        # 1 法人
+        if i:
+            f, t, f5, t5, d5 = i[0], i[1], i[3], i[5], i[7]; tot5 = f5 + t5 + d5
+            col = "g" if (tot5 > 0 and f5 > 0 and t5 >= 0) else "r" if (tot5 < 0 and f5 < 0 and t5 <= 0) else "y"
+            st = lambda v, n: f"{n}連買 {v} 日" if v > 0 else f"{n}連賣 {-v} 日" if v < 0 else f"{n}今日未買賣"
+            txt = f"{st(f, '外資')}、{st(t, '投信')}；外資 5 日 {sg(f5)} 張、投信 5 日 {sg(t5)} 張，三大法人 5 日合計 {sg(tot5)} 張。"
+            hint = {"g": "外資與投信近 5 日都沒有在賣，偏多。", "r": "外資與投信近 5 日都在賣，偏空。", "y": "外資與投信方向不一致或不明顯，屬分歧。"}[col]
+            lights.append(["inst", "法人動向", col, txt + hint])
+        else: lights.append(["inst", "法人動向", "n", "官方資料未提供此股票的法人買賣超。"])
+        # 2 融資、3 借券
+        mh = sa = 0; rr = rows and len(rows) > 6
+        row = cr["data"].get(code)
+        L = max((k for k, x in enumerate(row or []) if x and x[0] is not None), default=None)
+        if row and L is not None and L >= 5:
+            x = row[L]; mb = x[0]; lim = x[2]; use = mb / lim * 100 if lim else None
+            m5 = row[L - 5][0] if row[L - 5] and row[L - 5][0] else None
+            m5p = (mb - m5) / m5 * 100 if m5 else None
+            ret5 = (rows[-1][4] / rows[-6][4] - 1) * 100 if rr else None
+            mh = int(bool(m5p is not None and ret5 is not None and use is not None and m5p >= MH_PCT and ret5 >= MH_RET and use >= MH_USE))
+            col = "r" if (mh or (use or 0) >= 60) else "y" if ((use or 0) >= 40 or (m5p or 0) >= 5) else "g"
+            hint = {"r": "融資使用率高，或融資快速增加且股價上漲（追價偏熱），回檔時容易有斷頭賣壓。", "y": "融資偏高或近 5 日增加較快，留意。", "g": "融資使用率不高、增加不快，籌碼較穩。"}[col]
+            sh = x[3]
+            lights.append(["margin", "融資", col, f"融資餘額 {mb:,.0f} 張，使用率 {f1(use)}%，5 日增減 {f1(m5p)}%（收盤 5 日 {sg(ret5, 1)}%）；券資比 {f1(sh / mb * 100 if mb else None, 2)}%。" + hint])
+            o["mHot"] = mh; nM += mh
+            sb = x[5] if len(x) > 5 else None
+            sb5 = row[L - 5][5] if row[L - 5] and len(row[L - 5]) > 5 else None
+            sb20 = row[L - 20][5] if L >= 20 and row[L - 20] and len(row[L - 20]) > 5 else None
+            if sb is not None and sb5 and rr:
+                v20 = sum((r[5] or 0) for r in rows[-20:]) / 20 / 1000 if len(rows) >= 20 else None
+                p5 = (sb - sb5) / sb5 * 100; inc = sb - sb5
+                sa = int(bool(p5 >= SBL_PCT and v20 and inc >= SBL_VOL * v20 and sb20 is not None and sb > sb20))
+                col = "r" if sa else "y" if p5 >= 5 else "g"
+                hint = {"r": "借券賣出餘額短期明顯累積，是潛在賣壓。", "y": "借券賣出餘額有增加，留意。", "g": "借券賣出餘額沒有明顯累積。"}[col]
+                lights.append(["sbl", "借券賣壓", col, f"借券賣出餘額 {sb:,.0f} 張，5 日 {sg(inc)} 張（{sg(p5, 1)}%）" + (f"，約為 20 日均量的 {inc / v20 * 100:.0f}%" if v20 and inc > 0 else "") + "。" + hint])
+                o["sblAcc"] = sa; nS += sa
+            else: lights.append(["sbl", "借券賣壓", "n", "借券賣出餘額資料不足。"])
+        else:
+            lights.append(["margin", "融資", "n", "官方資料未提供（非融資融券標的，或當日未列入）。"]); lights.append(["sbl", "借券賣壓", "n", "官方資料未提供。"])
+        # 4 大戶（TDCC 每週）
+        tr = td["trend"].get(code) or []
+        if len(tr) >= 2:
+            d = tr[-1][1] - tr[-2][1]; k = tr[-1][2] - tr[-2][2]
+            col = "g" if d >= 0.3 else "r" if d <= -0.3 else "y"
+            hint = {"g": "大戶持股比上升，籌碼集中。", "r": "大戶持股比下降，籌碼分散。", "y": "大戶持股比變動不大。"}[col]
+            lights.append(["big", "大戶持股", col, f"大戶（≥400 張）持股比 {tr[-1][1]:.2f}%，較 {tr[-2][0]} {d:+.2f} 個百分點；千張大戶 {tr[-1][2]:.2f}%（{k:+.2f}）。" + hint])
+        elif tr:
+            lights.append(["big", "大戶持股", "n", f"大戶持股比 {tr[-1][1]:.2f}%（{tr[-1][0]}）；週變化需兩週資料，官方只提供最新一週，本站每週存檔，下週起顯示。"])
+        else: lights.append(["big", "大戶持股", "n", "集保股權分散表未列入此證券。"])
+        # 5 外資持股比率
+        if q and q[2] is not None:
+            col = "g" if q[2] >= 0.3 else "r" if q[2] <= -0.3 else "y"
+            hint = {"g": "外資持股比近 20 日上升。", "r": "外資持股比近 20 日下降。", "y": "外資持股比近 20 日變動不大。"}[col]
+            lights.append(["qf", "外資持股比", col, f"外資持股比率 {q[0]:.2f}%，5 日 {sg(q[1], 2)}、20 日 {sg(q[2], 2)} 個百分點。" + hint])
+        elif q: lights.append(["qf", "外資持股比", "n", f"外資持股比率 {q[0]:.2f}%（歷史累積中，尚無 20 日變化）。"])
+        else: lights.append(["qf", "外資持股比", "n", "官方未提供外資持股比率。"])
+        o["l"] = lights; items[code] = o
+    wjson("chipflags.json", dict(asof=days[-1], tdccWeeks=td.get("weeks"), items=items, updated=now().isoformat(timespec="seconds"),
+          th=dict(sblPct=SBL_PCT, sblVol=SBL_VOL, mhPct=MH_PCT, mhRet=MH_RET, mhUse=MH_USE),
+          note="燈號：綠＝偏穩／偏多，黃＝留意／分歧，紅＝警示／偏空，灰＝無資料；皆為觀察標示，不是買賣訊號。借券賣壓累積：借券賣出餘額 5 日增 ≥10%、增加量 ≥20 日均量 20%、20 日餘額也增；融資追價過熱：融資 5 日增 ≥8%、收盤 5 日漲 ≥3%、使用率 ≥10%。",
+          sources=dict(credit="證交所 MI_MARGN／TWT93U、櫃買中心融資融券與借券賣出餘額", tdcc="集保開放資料 1-5", qfii="證交所 MI_QFIIS、櫃買中心僑外資持股")))
+    print("chipflags ok", len(items), "借券賣壓累積", nS, "融資追價過熱", nM)
+
+def levelchips():
+    """把借券賣壓累積／融資追價過熱當作第一壓力帶的共振依據（量不是價位，只輔助）：重寫 history/*.json 的 levels.resistance[0]（含其強度）。"""
+    import levels as LV
+    fl = json.loads((OUT / "chipflags.json").read_text())["items"]; n = 0
+    for f in HIS.glob("*.json"):
+        try:
+            h = json.loads(f.read_text()); o = fl.get(h["code"]); L = h.get("levels")
+            if not o or not L or not L.get("resistance"): continue
+            if LV.add_chip_basis(L, bool(o.get("sblAcc")), bool(o.get("mHot"))): f.write_text(json.dumps(h, ensure_ascii=False)); n += 1
+        except Exception as e: print("levelchips skip", f.name, e)
+    print("levelchips ok", n)
+
 DT_DAYS = 20
 def _tw_dt(d):
     j = get(f"https://www.twse.com.tw/rwd/zh/dayTrading/TWTB4U?date={d.replace('-', '')}&selectType=All&response=json", tries=2)
@@ -886,7 +978,7 @@ def hist52():
     print("hist52 ok", n, "skip", bad)
 
 def main(which="all"):
-    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, hist52=hist52, events=events, metrics=metrics, fin=fin, dividends=dividends, valhist=valhist, tdcc=tdcc, daytrade=daytrade, market=market, taifex=taifex, macro=macro)
+    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, hist52=hist52, events=events, metrics=metrics, fin=fin, dividends=dividends, valhist=valhist, tdcc=tdcc, daytrade=daytrade, chipflags=chipflags, levelchips=levelchips, market=market, taifex=taifex, macro=macro)
     for k, fn in steps.items():
         if which in ("all", k):
             try: fn()
