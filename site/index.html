@@ -1,5 +1,5 @@
 <!DOCTYPE html><html lang="zh-Hant-TW"><head><meta charset="utf-8"><meta name="viewport" id="vp" content="width=device-width,initial-scale=1">
-<title>台股研究室｜盤後觀察</title><link rel="stylesheet" href="style.css?v=xd23">
+<title>台股研究室｜盤後觀察</title><link rel="stylesheet" href="style.css?v=xd25">
 <script>(function(){var m='auto';try{m=localStorage.getItem('tw-viewmode')||'auto'}catch(e){}
 var mob=m==='mobile'||(m==='auto'&&matchMedia('(max-width:768px)').matches);
 if(mob)document.documentElement.classList.add('m');
@@ -13,6 +13,7 @@ if(m==='desktop'&&screen.width<=768)document.getElementById('vp').setAttribute('
 <button class="nav" data-view="watch">☆ 我的自選<span id="nWatch">0</span></button>
 <button class="nav" data-view="w25">★ 自選 25 檔總覽<span id="nW25">25</span></button>
 <button class="nav" data-view="etf">▤ ETF<span id="nEtf"></span></button>
+<button class="nav" data-view="dtw">⚡ 當沖觀察</button>
 <button class="nav" data-view="theme">◈ 題材族群與強弱</button>
 <button class="nav" data-view="cal">▦ 日程日曆</button>
 <button class="nav" data-view="etfagg">⇅ ETF 合計增減</button>
@@ -27,6 +28,7 @@ if(m==='desktop'&&screen.width<=768)document.getElementById('vp').setAttribute('
 <div><small>上櫃市場</small><strong id="cTp">—<em> 檔</em></strong><span id="dTp">交易日期 —</span><span class="src">來源：櫃買中心</span></div>
 <div><small>我的觀察清單</small><strong id="cW">0<em> 檔</em></strong><span>點選星號加入 · 儲存於此瀏覽器</span></div>
 <div class="note"><span class="dot"></span><div><b>把數據變成觀察</b><p>資料每個交易日收盤後自動更新。<br><span id="covN">歷史走勢涵蓋主要個股</span>，其餘逐日累積。</p></div></div></div>
+<div id="hotbox"></div>
 <div class="workspace"><section class="listpanel">
 <div class="paneltitle"><h2 id="listTitle">全部股票</h2><span id="listCount"></span></div>
 <label class="search"><input id="q" placeholder="搜尋代號或名稱，例如 2330"></label>
@@ -44,4 +46,4 @@ if(m==='desktop'&&screen.width<=768)document.getElementById('vp').setAttribute('
 <div class="stocks" id="list"><div class="empty">正在載入證交所與櫃買中心資料…</div></div></section>
 <section class="detail" id="detail"><div class="empty">選擇一檔股票開始研究。</div></section></div>
 <button id="toTop" aria-label="回到頂部">↑</button><footer>台股研究室 <span>數據有依據，決策有自己的觀點。</span><small>僅供研究參考，非投資建議</small></footer>
-</main></div><script src="app.js?v=xd23"></script></body></html>
+</main></div><script src="app.js?v=xd25"></script></body></html>

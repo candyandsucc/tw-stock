@@ -781,6 +781,82 @@ def levelchips():
         except Exception as e: print("levelchips skip", f.name, e)
     print("levelchips ok", n)
 
+# ============ 階段4：長線體檢（純計算＋逐年累積，不連網；失敗由 main 容錯） ============
+def health():
+    """長線體檢 → health.json。營收連續年增月數（rev.json，公開資訊觀測站月營收）、單季 EPS／毛利率（fin.json，官方彙總表只提供最新一季，逐季存檔累積）、
+    近四季 EPS 隱含走勢（收盤÷本益比，BWIBBU 逐日）、ROE 約略值（股價淨值比÷本益比）、配息連續年數（div.json 逐年累積在 snapshots/health/divyears.json）、估值百分位（valhist.json）。
+    三個燈號：成長（營收連續年增）、獲利體質（ROE、EPS 走勢、毛利率）、估值（本益比百分位）；綠／黃／紅／灰，皆為觀察標示。"""
+    HD = SNAP / "health"; HD.mkdir(parents=True, exist_ok=True)
+    rev = json.loads((OUT / "rev.json").read_text())["items"] if (OUT / "rev.json").exists() else {}
+    fin = json.loads((OUT / "fin.json").read_text()) if (OUT / "fin.json").exists() else {"items": {}}
+    dv = json.loads((OUT / "div.json").read_text())["items"] if (OUT / "div.json").exists() else {}
+    vh = json.loads((OUT / "valhist.json").read_text()) if (OUT / "valhist.json").exists() else {"items": {}, "days": []}
+    # 配息逐年累積（官方公告表只涵蓋近期；本站每天存檔，之後逐年補齊）
+    dyf = HD / "divyears.json"
+    try: dy = json.loads(dyf.read_text())
+    except Exception: dy = {}
+    for c, o in dv.items():
+        by = {}
+        for h in o.get("h", []):
+            if h[0] and h[3] and h[3] > 0: by[h[0]] = by.get(h[0], 0) + h[3]
+        for y, v in by.items():
+            d = dy.setdefault(c, {}); d[str(y)] = round(max(d.get(str(y), 0), v), 4)
+    dyf.write_text(json.dumps(dy, ensure_ascii=False, separators=(",", ":")))
+    out = {}
+    for c in set(rev) | set(fin["items"]) | set(vh["items"]):
+        o = {}; hp = HIS / f"{c}.json"; rows = None
+        if hp.exists():
+            try: rows = json.loads(hp.read_text())["rows"]
+            except Exception: rows = None
+        # 營收
+        r = rev.get(c)
+        if r:
+            yoy = [x[2] for x in r]; k = 0
+            for v in reversed(yoy):
+                if v is not None and v > 0: k += 1
+                else: break
+            last3 = [v for v in yoy[-3:] if v is not None]
+            o["rev"] = dict(streak=k, n=len(yoy), last=r[-1][0], yoy=yoy[-1], avg3=round(sum(last3) / len(last3), 1) if last3 else None, ser=[[x[0], x[2]] for x in r])
+        # 單季
+        q = fin["items"].get(c)
+        if q:
+            qq = q[-1]; o["fin"] = dict(y=qq[0], q=qq[1], gm=qq[3], om=qq[4], nm=qq[5], eps=qq[6], hist=[[x[0], x[1], x[3], x[6]] for x in q])
+            if len(q) >= 2: o["fin"]["gmChg"] = round(q[-1][3] - q[-2][3], 2) if q[-1][3] is not None and q[-2][3] is not None else None
+        # 估值、ROE、近四季 EPS 隱含走勢
+        v = vh["items"].get(c)
+        if v:
+            pe, pb = v.get("pe"), v.get("pb")
+            o["val"] = dict(pe=pe and pe.get("cur"), pct=pe and pe.get("pct"), n=pe and pe.get("n"), pb=pb and pb.get("cur"))
+            if pe and pe.get("cur") and pe["cur"] > 0 and pb and pb.get("cur"): o["roe"] = round(pb["cur"] / pe["cur"] * 100, 1)
+            if rows and v.get("s"):
+                cl = {x[0]: x[4] for x in rows}; ser = v["s"][0]; days = vh["days"]
+                pts = [(d, cl[d] / p) for d, p in zip(days, ser) if p and p > 0 and d in cl]
+                if len(pts) >= 20: o["epsTtm"] = dict(now=round(pts[-1][1], 2), then=round(pts[0][1], 2), since=pts[0][0], chg=round((pts[-1][1] / pts[0][1] - 1) * 100, 1))
+        # 配息
+        d = dy.get(c)
+        if d:
+            ys = sorted(int(y) for y in d); k = 0; y = ys[-1]
+            while str(y) in d and d[str(y)] > 0: k += 1; y -= 1
+            o["div"] = dict(years=ys, streak=k, cash={y: d[y] for y in sorted(d)})
+        # 燈號
+        L = {}
+        if o.get("rev"):
+            R = o["rev"]; L["g"] = "g" if R["streak"] >= 6 and (R["avg3"] or 0) >= 10 else "y" if (R["streak"] >= 3 or (R["avg3"] or -1) >= 0) else "r"
+        else: L["g"] = "n"
+        if o.get("roe") is not None:
+            e = (o.get("epsTtm") or {}).get("chg"); gm = (o.get("fin") or {}).get("gmChg")
+            L["q"] = "r" if (o["roe"] < 5 or (e is not None and e < -10)) else "g" if (o["roe"] >= 10 and (e is None or e >= 0) and (gm is None or gm >= -1)) else "y"
+        else: L["q"] = "n"
+        pc = (o.get("val") or {}).get("pct"); nn = (o.get("val") or {}).get("n") or 0
+        L["v"] = "n" if (pc is None or nn < 60 or not (o.get("val") or {}).get("pe")) else "g" if pc <= 30 else "y" if pc <= 70 else "r"
+        o["l"] = L
+        if any(x != "n" for x in L.values()) or o.get("div"): out[c] = o
+    wjson("health.json", dict(asof=now().date().isoformat(), items=out, updated=now().isoformat(timespec="seconds"),
+          note="長線體檢的燈號是依固定規則的觀察標示，不是買賣建議。成長燈：營收年增連續 ≥6 個月且近 3 月平均年增 ≥10% 為綠，連續 ≥3 個月或近 3 月平均年增 ≥0 為黃，其餘紅；獲利體質燈：約略 ROE（股價淨值比÷本益比）≥10% 且近四季 EPS 隱含走勢未下滑、毛利率較前季未降超過 1 個百分點為綠，ROE <5% 或近四季 EPS 隱含走勢下滑超過 10% 為紅，其餘黃；估值燈：本益比在近期（官方可回補約 65 個交易日，逐日累積）的百分位 ≤30% 綠、≤70% 黃、>70% 紅，資料不足 60 日或虧損不評。",
+          limits="官方彙總表只提供最新一季財報與近期股利公告，EPS／毛利率逐季走勢與配息連續年數自本站存檔起逐季、逐年累積；累積不足者標示「累積中」，不補假資料。",
+          sources=dict(rev="公開資訊觀測站月營業收入彙總表", fin="證交所 t187ap17_L／t187ap06_L、櫃買 mopsfin_187ap17_O", div="證交所 t187ap45_L、櫃買 mopsfin_t187ap39_O", val="證交所 BWIBBU_d、櫃買 peQryDate")))
+    print("health ok", len(out))
+
 DT_DAYS = 20
 def _tw_dt(d):
     j = get(f"https://www.twse.com.tw/rwd/zh/dayTrading/TWTB4U?date={d.replace('-', '')}&selectType=All&response=json", tries=2)
@@ -978,7 +1054,7 @@ def hist52():
     print("hist52 ok", n, "skip", bad)
 
 def main(which="all"):
-    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, hist52=hist52, events=events, metrics=metrics, fin=fin, dividends=dividends, valhist=valhist, tdcc=tdcc, daytrade=daytrade, chipflags=chipflags, levelchips=levelchips, market=market, taifex=taifex, macro=macro)
+    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, hist52=hist52, events=events, metrics=metrics, fin=fin, dividends=dividends, valhist=valhist, tdcc=tdcc, daytrade=daytrade, chipflags=chipflags, levelchips=levelchips, health=health, market=market, taifex=taifex, macro=macro)
     for k, fn in steps.items():
         if which in ("all", k):
             try: fn()

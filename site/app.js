@@ -52,6 +52,7 @@ function render(){
   $('#list').innerHTML=L.slice(0,300).map(x=>`<div class="row ${x.code===sel?'sel':''}" data-c="${x.code}"><span class="star ${w.includes(x.code)?'on':''}" data-s="${x.code}">${w.includes(x.code)?'★':'☆'}</span>
   <div class="nm"><b>${x.name}</b><small>${x.code}<span class="tag">${x.market}${x.etf?' · ETF':''}</span>${ETFSET.has(x.code)?'<span class="tag hold">持股明細</span>':''}${flHtml(x.code)}${dtTags(x)}${SC&&SC.items[x.code]?` <span class="tier t${SC.items[x.code].tier}">${TIERS[SC.items[x.code].tier]}</span>`:(x.hasHistory?'':' <span title="尚無月歷史">◦</span>')}</small></div>
   <div class="px"><b>${fmt(x.close)}</b><small class="${cls(x.change)}">${sg(x.change)}${fmt(x.change)} (${sg(x.change)}${fmt(pct(x)*100)}%)</small>${SK&&SK.f(x)!=null?`<small class="sml">${SK.t(x)}</small>`:''}</div></div>`).join('')||'<div class="empty">沒有符合的股票</div>';
+  try{hotBox();}catch(e){}
   if(L.length>300)$('#list').insertAdjacentHTML('beforeend','<div class="empty">僅顯示前 300 檔，請用搜尋縮小範圍</div>');
   $('#list').querySelectorAll('.row').forEach(r=>r.onclick=e=>{if(e.target.dataset.s)toggle(e.target.dataset.s);else{pick(r.dataset.c);toDetail();}});
 }
@@ -149,6 +150,9 @@ function dtCard(s){
   <div><small>成交值排行</small><b>第 ${r.all||'—'}<em> / ${r.n||'—'}</em></b><small>${fmt(s.value/1e8,2)} 億 · ${s.market}第 ${r.mk||'—'} / ${r.mn||'—'}</small></div>
   <div><small>成交量</small><b class="${d.liq==='low'||d.liq==='none'?'down':d.liq==='warn'?'warnc':''}">${fmt(d.vol,0)}<em> 張</em></b><small>${liqT}</small></div>
   <div><small>漲跌停（依前收±10%推算）</small>${lim}<small>漲停 ${fmt(d.U)} · 跌停 ${fmt(d.D)}${d.flat?' · 一字':''}</small></div></div>
+  <div class="m4"><div><small>最近交易日 高／低／收（${dfmt(s.date)}）</small><b class="sm">${fmt(s.high)} / ${fmt(s.low)} / ${fmt(s.close)}</b><small>前收 ${fmt(d.pc)} · 昨日（資料日）振幅 ${fmt(d.amp,2)}%</small></div>
+  <div><small>收盤距今日漲停</small><b class="up">${fmt((d.U/s.close-1)*100,2)}<em>%</em></b><small>漲停 ${fmt(d.U)}</small></div><div><small>收盤距今日跌停</small><b class="down">${fmt((d.D/s.close-1)*100,2)}<em>%</em></b><small>跌停 ${fmt(d.D)}</small></div>
+  <div><small>注意股／處置股標籤</small><b>${flHtml(s.code)||'無'}</b><small>${FL?'官方公告 '+dfmt(FL.asof):'載入中'}</small></div></div>
   ${d.liq==='low'||d.liq==='warn'||d.liq==='none'?`<p class="rc-note dtw">⚠ 流動性警示：成交量 ${fmt(d.vol,0)} 張，${d.liq==='none'?'當日無成交':`低於 ${d.liq==='low'?LIQ_LOW:LIQ_WARN} 張`}，當沖進出可能難以成交或價差擴大。門檻為本站自訂。</p>`:''}
   <p class="rc-note">振幅與漲跌停以官方當日行情自行計算；漲跌停價依「前收盤 ±10%、依升降單位取整」推算，除權息日以官方公告為準（本站不推算參考價）。成交值排行為當日全市場（上市＋上櫃，含 ETF）排名。這是資料特徵，不是當沖或買賣建議。</p></div>`;}
 /* 清單排序：籌碼類（CSV）— 無資料者排最後；排序時列出該指標值 */
@@ -221,7 +225,7 @@ function xfUI(){const el=$('#xfbox');if(!el)return;const gs=[...new Set(XFDEF.ma
   el.innerHTML=gs.map(g=>`<div class="scr-h"><b>${g}</b><span>${g==='交易警示'&&FL?'資料 '+dfmt(FL.asof)+'（官方）':''}</span></div><div class="chips">${XFDEF.filter(d=>d.g===g).map(d=>`<button data-xf="${d.id}" class="${XF===d.id?'on':''}" title="${d.title}">${d.name}<em>${ALL.filter(x=>d.t(x.code,x)).length}</em></button>`).join('')}</div>`).join('');
   el.querySelectorAll('button').forEach(b=>b.onclick=()=>{XF=XF===b.dataset.xf?'':b.dataset.xf;xfUI();render();});}
 /* ===== 信用交易（融資／融券／借券賣出）與外資持股比率；籌碼摘要（連買連賣、5/20 日累計） ===== */
-let CS=null,CR=null,CRp=null,CF=null;
+let CS=null,CR=null,CRp=null,CF=null,HL=null;
 const sgn=(v,d=0)=>v==null?'—':(v>0?'+':'')+fmt(v,d);
 function spark(vals,days,fmtv,cl){const pts=vals.map((v,i)=>[i,v]).filter(p=>p[1]!=null);if(pts.length<2)return '<small>資料不足</small>';
   const w=300,h=54,p=4,mn=Math.min(...pts.map(x=>x[1])),mx=Math.max(...pts.map(x=>x[1])),X=i=>p+i*(w-2*p)/(vals.length-1),Y=v=>p+(h-2*p)*(1-(v-mn)/(mx-mn||1));
@@ -371,16 +375,21 @@ function levelClass(L,close,H){
   (L.support||[]).forEach((b,i)=>add(i?'第二支撐':'近端支撐',b,'s'));
   add('長期結構價位（下方超過 −20%）',L.longSupport,'s');
   items.sort((p,q)=>q.b.price-p.b.price);
-  const row=it=>{const b=it.b,k=it.kind,st=bandState(b,k,close);
-    return `<tr><td><b>${it.cat}</b>${provChip(b)}</td><td class="num"><b>${fmt(b.price)}</b>${b.low!==b.high?`<small>帶 ${fmt(b.low)}–${fmt(b.high)}</small>`:''}</td><td>${strChip(b)}<small>${b.n} 招</small></td><td class="num ${b.dist<0?'down':'up'}">${b.dist>0?'+':''}${fmt(b.dist,1)}%</td>
+  const S1=(L.support||[])[0],R1=(L.resistance||[])[0],stopOf=b=>rtk(b.low*0.99,-1);
+  const rrOf=(b,k)=>{let ent,stop,tg;
+    if(k==='s'){if(b.dist<-20)return null;ent=Math.min(b.high,close);stop=stopOf(b);tg=R1&&R1.low;}
+    else{if(!S1)return null;ent=close;stop=stopOf(S1);tg=b.low;}
+    if(!tg||tg<=ent||ent<=stop)return null;return {rr:(tg-ent)/(ent-stop),risk:(ent-stop)/ent*100,rew:(tg-ent)/ent*100};};
+  const row=it=>{const b=it.b,k=it.kind,st=bandState(b,k,close),rr=rrOf(b,k);
+    return `<tr><td><b>${it.cat}</b>${provChip(b)}</td><td class="num"><b>${fmt(b.price)}</b>${b.low!==b.high?`<small>帶 ${fmt(b.low)}–${fmt(b.high)}</small>`:''}</td><td>${strChip(b)}<small>${b.n} 招</small></td><td class="num ${b.dist<0?'down':'up'}">${b.dist>0?'+':''}${fmt(b.dist,1)}%</td><td class="num">${rr?`<b class="${rr.rr>=2?'up':rr.rr<1?'down':''}">1 : ${fmt(rr.rr,2)}</b><small>風險 ${fmt(rr.risk,1)}%／報酬 ${fmt(rr.rew,1)}%</small>`:'<small>—</small>'}</td>
     <td><details><summary>共振依據</summary><div class="tags">${b.basis.map(x=>`<i>${x}</i>`).join('')}</div><p class="rc-note">${touchTxt(b,k)||'—'}；最近結構日 ${dfmt(b.last)}。${b.prov?'此帶僅由近期尚未確認的高低點構成，標為暫定。':''}</p></details></td></tr>`;};
   const mid=items.findIndex(it=>it.b.price<close);const rows=items.map(row);
-  const cur=`<tr class="curpx"><td colspan="5">▶ 現價 ${fmt(close)}</td></tr>`;
+  const cur=`<tr class="curpx"><td colspan="6">▶ 現價 ${fmt(close)}</td></tr>`;
   if(mid<0)rows.push(cur);else rows.splice(mid,0,cur);
   const z=L.zone;
   const zhtml=z?`<div class="zonebox"><div><small>布局參考區（成交量集中區）</small><b>${fmt(z.low)} – ${fmt(z.high)}</b><small>區間下緣 ${fmt(z.low)} · 區間上緣 ${fmt(z.high)} · 現價在${z.pos}</small></div><p class="rc-note">${z.note}。白話：這是最近大家最常成交的價格範圍，現價在區內代表落在多數人成交的地方，不代表會漲或跌；它是本站自行計算的參考區，不是其他網站的「結構觀察區」。</p></div>`:'';
-  return `<details class="lvclass"><summary>價位分類</summary>${zhtml}<div class="tablewrap"><table class="tdt lvt"><tr><th>類別</th><th>價位（靠近現價的一端）</th><th>共振強度</th><th>距現價</th><th></th></tr>${rows.join('')}</table></div>
-  <p class="rc-note">分類規則：壓力依「第一個距現價 ≥1% 或依據 ≥3 種」取第一壓力；第二壓力需與第一壓力帶隔開（隨波動調整，約 2%–7%）；現價上方 +10% 以外的壓力列為中長期結構價位（最多 3 個）；現價下方 −20% 以外為長期結構價位。價位皆為本站自行計算的觀察價位，不是買賣建議。</p></details>`;}
+  return `<details class="lvclass"><summary>價位分類</summary>${zhtml}<div class="tablewrap"><table class="tdt lvt"><tr><th>類別</th><th>價位（靠近現價的一端）</th><th>共振強度</th><th>距現價</th><th>風險報酬比</th><th></th></tr>${rows.join('')}</table></div>
+  <p class="rc-note">分類規則：壓力依「第一個距現價 ≥1% 或依據 ≥3 種」取第一壓力；第二壓力需與第一壓力帶隔開（隨波動調整，約 2%–7%）；現價上方 +10% 以外的壓力列為中長期結構價位（最多 3 個）；現價下方 −20% 以外為長期結構價位。風險報酬比：支撐帶＝在帶上緣（或收盤，取低者）進場、停損設在該帶下緣 −1%，目標為第一壓力下緣；壓力帶＝以收盤價進場、停損設在第一支撐帶下緣 −1%，目標為該壓力帶下緣；沒有目標或空間為負時顯示「—」，只是量化「離得多遠」，不是進出場建議。價位皆為本站自行計算的觀察價位，不是買賣建議。</p></details>`;}
 /* ===== 進場觀察區／停損參考／風險報酬比（可切換規則；觀察價位，非買賣建議） ===== */
 let RRS={stop:1,tgt:'r1low',ent:'close'};
 const tickOf=p=>p<10?0.01:p<50?0.05:p<100?0.1:p<500?0.5:p<1000?1:5;
@@ -464,6 +473,22 @@ function posTrack(s,L){const s1=L&&L.support[0],r1=L&&L.resistance[0],close=s.cl
   const pos=(close-s1.price)/(r1.price-s1.price)*100;
   return `<div class="rcard postrack"><div class="rc-head"><h3>收盤在支撐與壓力之間的位置</h3><span>第一支撐 → 第一壓力</span></div><div class="track"><i style="left:${Math.max(0,Math.min(100,pos))}%"></i></div>
    <div class="pos3"><div><small>第一支撐</small><strong class="down">${fmt(s1.price)}</strong><em>價格帶 ${fmt(s1.low)}–${fmt(s1.high)}</em></div><div><small>收盤價</small><strong>${fmt(close)}</strong><em>位於區間 ${fmt(pos,1)}%</em></div><div><small>第一壓力</small><strong class="up">${fmt(r1.price)}</strong><em>價格帶 ${fmt(r1.low)}–${fmt(r1.high)}</em></div></div></div>`;}
+function healthCard(s){
+  const o=HL&&HL.items&&HL.items[s.code];if(!HL||s.etf)return '';
+  if(!o)return `<div class="rcard health"><div class="rc-head"><h3>長線體檢</h3><span>官方資料</span></div><p class="rc-note" style="margin:0">官方營收、財報與估值資料未列入此股票，無法體檢。</p></div>`;
+  const L=o.l||{},R=o.rev,F=o.fin,V=o.val,E=o.epsTtm,D=o.div;
+  const nm={g:'綠',y:'黃',r:'紅',n:'灰'};
+  const lamp=(k,t,txt)=>`<div class="hl3"><div><i class="lamp ${L[k]}"></i><b>${t}</b><span class="hlv">${nm[L[k]]}燈</span></div><p>${txt}</p></div>`;
+  const gT=R?`營收年增已連續 ${R.streak} 個月（共看 ${R.n} 個月），近 3 月平均年增 ${R.avg3==null?'—':sgn(R.avg3,1)+'%'}。${{g:'成長動能強。',y:'成長動能普通。',r:'營收年增沒有持續。',n:''}[L.g]}`:'官方月營收資料未列入。';
+  const qT=o.roe!=null?`約略 ROE ${fmt(o.roe,1)}%${E?`；近四季 EPS 隱含走勢 ${sgn(E.chg,1)}%（${dfmt(E.since)} 起）`:''}${F&&F.gmChg!=null?`；毛利率較前季 ${sgn(F.gmChg,2)} 個百分點`:''}。${{g:'賺錢效率高、獲利沒有下滑。',y:'獲利體質中等。',r:'賺錢效率偏低或獲利走弱。',n:''}[L.q]}`:'本益比或淨值比不足以估算 ROE（可能虧損或未列入）。';
+  const vT=V&&V.pe&&L.v!=='n'?`本益比 ${fmt(V.pe,1)} 倍，在近 ${V.n} 個交易日中位於第 ${fmt(V.pct,0)} 百分位。${{g:'相對近期偏便宜。',y:'相對近期中等。',r:'相對近期偏貴。',n:''}[L.v]}`:V&&V.pe?`本益比 ${fmt(V.pe,1)} 倍；歷史累積不足 60 個交易日，不評分位。`:'本益比不適用（虧損或未列入）。';
+  const cell=(t,v,sub)=>`<div><small>${t}</small><b>${v}</b><small>${sub}</small></div>`;
+  const q=F?`${F.y}Q${F.q}`:'';
+  return `<div class="rcard health"><div class="rc-head"><h3>長線體檢</h3><span>三個燈號 · 官方資料</span></div>
+  <div class="hl3w">${lamp('g','成長',gT)}${lamp('q','獲利體質',qT)}${lamp('v','估值',vT)}</div>
+  <div class="m4 m3h">${cell('營收連續年增',R?R.streak+' <em>個月</em>':'—',R?`最新 ${R.last}，年增 ${R.yoy==null?'—':sgn(R.yoy,1)+'%'}`:'官方未列入')}${cell('單季 EPS',F?fmt(F.eps,2)+' <em>元</em>':'—',F?`${q} · 毛利率 ${fmt(F.gm,1)}%`:'官方未列入')}${cell('近四季 EPS 隱含走勢',E?sgn(E.chg,1)+'<em>%</em>':'—',E?`收盤÷本益比：${fmt(E.then,2)} → ${fmt(E.now,2)} 元`:'資料不足')}${cell('約略 ROE',o.roe!=null?fmt(o.roe,1)+'<em>%</em>':'—','股價淨值比 ÷ 本益比')}${cell('配息連續年數',D?D.streak+' <em>年</em>':'—',D?`已存檔 ${D.years.join('、')} 年`:'官方未列入')}${cell('本益比百分位',V&&V.pct!=null&&L.v!=='n'?fmt(V.pct,0)+'<em>%</em>':'—',V?`${V.n} 日累積`:'')}</div>
+  <p class="rc-note">白話：<b>成長</b>看營收是不是一直比去年多；<b>獲利體質</b>看每投入一塊錢淨值能賺多少（ROE）、近四季獲利和毛利率有沒有下滑；<b>估值</b>看現在的本益比跟自己最近的歷史比貴不貴。${F&&(F.hist||[]).length<2?`EPS 與毛利率的逐季走勢需要多季資料，官方彙總表只提供最新一季，本站每季存檔，目前累積 ${(F.hist||[]).length} 季；配息連續年數同理，只含已存檔年度（${D?D.years.length:0} 年），不足的部分不推估。`:''}</p>
+  <p class="rc-note">${esc(HL.note)}</p></div>`;}
 function chipSummary(s){
   const o=CF&&CF.items&&CF.items[s.code];if(!o||!o.l)return '';
   const nm={g:'綠',y:'黃',r:'紅',n:'灰'},c={g:0,y:0,r:0,n:0};o.l.forEach(x=>c[x[2]]++);
@@ -473,7 +498,7 @@ function chipSummary(s){
   <div class="lamps">${o.l.map(x=>`<div class="lamprow"><i class="lamp ${x[2]}" title="${nm[x[2]]}燈"></i><b>${x[1]}</b><span>${esc(x[3])}</span></div>`).join('')}</div>
   <p class="rc-note">${esc(CF.note||'')}</p></div>`;}
 function fillResearch(s,H,C,E){const P=research(s,H,C,E),set=(id,h)=>{const e=$('#'+id);if(e)e.innerHTML=h;};
-  set('sl-verdict',P.verdict);set('sl-chips',chipSummary(s)+P.inst+P.credit+tdccCard(s));set('sl-dt',dyCard(s));set('sl-etf',P.etfh+P.etfc);set('sl-fund',P.fund);set('sl-ind',P.ind);set('sl-meth',P.method);const dh=(id,t)=>{const e=$('#dh-'+id);if(e&&t)e.textContent=t;};dh('chips',P.chipHint);dh('ind',P.indHint);dh('tech',P.techHint);}
+  set('sl-verdict',P.verdict);set('sl-chips',chipSummary(s)+P.inst+P.credit+tdccCard(s));set('sl-dt',dyCard(s));set('sl-etf',P.etfh+P.etfc);set('sl-fund',healthCard(s)+P.fund);set('sl-ind',P.ind);set('sl-meth',P.method);if(HL&&HL.items&&HL.items[s.code]&&!s.etf){const l=HL.items[s.code].l||{},nm={g:'綠',y:'黃',r:'紅',n:'灰'};P.fundHint=`成長${nm[l.g]}・獲利體質${nm[l.q]}・估值${nm[l.v]}（長線體檢）`;}const dh=(id,t)=>{const e=$('#dh-'+id);if(e&&t)e.textContent=t;};dh('chips',P.chipHint);dh('fund',P.fundHint);dh('ind',P.indHint);dh('tech',P.techHint);}
 function research(s,H,C,E){
   const close=s.close;let o='';const P={};
   // 產業
@@ -715,7 +740,7 @@ const inst5=c=>{const i=CS&&CS.items[c]&&CS.items[c].i;return i?i[3]+i[5]+i[7]:n
 const themesOf=c=>TH?TH.themes.filter(t=>t.codes.includes(c)):[];
 const themeSet=()=>themeSet._s||(themeSet._s=new Set(TH?TH.themes.flatMap(t=>t.codes):[]));
 function setView(v){document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===v));view=v;$('#side').classList.remove('open');render();runView();}
-function runView(){const f={w25:overview,theme:themePage,cal:calPage,etfagg:etfAggPage,mkt:mktPage}[view];if(f){f();toDetail();}}
+function runView(){const f={w25:overview,theme:themePage,cal:calPage,etfagg:etfAggPage,mkt:mktPage,dtw:dtWatchPage}[view];if(f){f();toDetail();}}
 document.addEventListener('click',e=>{const a=e.target.closest('[data-theme]');if(a){e.preventDefault();THSEL=a.dataset.theme;setView('theme');}
   const g=e.target.closest('[data-pickc]');if(g){e.preventDefault();pick(g.dataset.pickc);toDetail();}});
 const srcNote=t=>`<p class="note2">${t}</p>`;
@@ -847,7 +872,7 @@ Object.assign(SORTS,{
 
 /* ================= 第二批（段二）：重大訊息、財報、股利／填息、估值分位、集保大戶、當沖比 ================= */
 let FI=null,DV=null,VH=null,TD=null,DY=null,P2p=null;
-const p2load=()=>P2p||(P2p=Promise.all([['fin',v=>FI=v],['futures',v=>FU=v],['div',v=>DV=v],['valhist',v=>VH=v],['tdcc',v=>TD=v],['daytrade',v=>DY=v],['chipflags',v=>CF=v]].map(([n,f])=>fetch('data/'+n+'.json').then(r=>r.json()).then(f).catch(()=>null))));
+const p2load=()=>P2p||(P2p=Promise.all([['fin',v=>FI=v],['futures',v=>FU=v],['div',v=>DV=v],['valhist',v=>VH=v],['tdcc',v=>TD=v],['daytrade',v=>DY=v],['chipflags',v=>CF=v],['health',v=>HL=v]].map(([n,f])=>fetch('data/'+n+'.json').then(r=>r.json()).then(f).catch(()=>null))));
 const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const nwSrc='<a href="https://mops.twse.com.tw/mops/web/t05sr01_1" target="_blank" rel="noreferrer">公開資訊觀測站 重大訊息 ↗</a>';
 const nwDays=()=>(NW&&NW.days||[]).slice().sort();
@@ -1091,4 +1116,49 @@ function mktPage(){
    <div class="rcard"><div class="rc-head"><h3>近期重要日程</h3><span>人工維護 · 更新 ${dfmt(MCAL.updated)} · 附官方來源</span></div>${E.length?`<ul class="gapl evl">${E.slice(0,8).map(li).join('')}</ul>${E.length>8?`<details><summary>更多日程（${E.length-8} 筆）</summary><ul class="gapl evl">${E.slice(8).map(li).join('')}</ul></details>`:''}`:'<p class="rc-note">未來 60 天沒有已登錄的事件（本表為人工維護，可能尚未更新）。</p>'}
    <p class="rc-note">${esc(MCAL.note)} 個股的除權息、法說會、財報期限見「日程日曆」。</p></div>`;}
   box.innerHTML=h;
+}
+
+/* ================= 階段4：當沖觀察清單、今日熱門、題材標籤（只用官方收盤後資料；盤中跳空與即時量做不到，不假裝有） ================= */
+const DTW={k:'amp'},DTW_MINVOL=5000,DTW_MINAMP=3,DTW_TOP=100;
+const tmrLimits=c=>{const U=c*1.1,D=c*0.9,tu=tickOf(U),td=tickOf(D);return {U:+(Math.floor(U/tu+1e-9)*tu).toFixed(2),D:+(Math.ceil(D/td-1e-9)*td).toFixed(2)};};
+function dtWatchList(){
+  const out=[];ALL.forEach(x=>{if(x.etf||!/^\d{4}$/.test(x.code))return;const d=dtOf(x);if(!d)return;
+    const rk=(vrank()[x.code]||{}).all||9999;
+    if(rk>DTW_TOP||d.vol<DTW_MINVOL||d.amp<DTW_MINAMP)return;
+    if(FL&&FL.avoid&&FL.avoid.includes(x.code))return;if(d.lockU||d.lockD)return;
+    const dy=DY&&DY.items[x.code];out.push({x,d,rk,vr:mv(x.code,'volRatio'),dy:dy&&dy.at(-1)!=null?dy.at(-1):null,ds:mv(x.code,'distSupport'),rr:mv(x.code,'rr')});});
+  return out;}
+function dtWatchPage(){
+  const box=$('#detail');if(!box)return;
+  const L=dtWatchList(),K={amp:r=>r.d.amp,val:r=>r.x.value||0,vr:r=>r.vr==null?-1:r.vr,dy:r=>r.dy==null?-1:r.dy};
+  L.sort((a,b)=>K[DTW.k](b)-K[DTW.k](a));
+  const tab=(k,t)=>`<button data-dtk="${k}" class="${DTW.k===k?'on':''}">${t}</button>`;
+  box.innerHTML=`<div class="eyebrow">DAY-TRADE WATCH <span>資料日 ${dfmt(META.twseDate)} · 官方收盤後資料</span></div>
+  ${grp('當沖觀察清單','前一交易日夠活躍的標的（非盤中資料）')}
+  <div class="rcard"><div class="rc-head"><h3>篩選條件（固定，不放寬）</h3><span>符合 ${L.length} 檔</span></div>
+  <ul class="dtw-rule"><li>一般股（不含 ETF）</li><li>成交值全市場前 ${DTW_TOP} 名</li><li>成交量 ≥ ${fmt(DTW_MINVOL,0)} 張</li><li>當日振幅 ≥ ${DTW_MINAMP}%</li><li>不是處置、全額交割、管理股票、停止交易</li><li>收盤沒有鎖漲停或跌停（鎖死無法當沖）</li></ul>
+  <p class="rc-note">注意股不會被排除，但會標示「注意」標籤；沒有任何標的符合時就是 0 檔，不放寬條件。這是資料特徵，不是當沖或買賣建議。</p></div>
+  <div class="rcard"><div class="rc-head"><h3>清單</h3><span>點欄位上方按鈕切換排序</span></div>
+  <div class="tabs dtwtabs">${tab('amp','振幅 ↓')}${tab('val','成交值 ↓')}${tab('vr','量比 ↓')}${tab('dy','當沖比 ↓')}</div>
+  <p class="rc-note" style="margin:0 0 6px"><b>白話：</b>振幅＝一天內最高價與最低價的差距占前收的比例，越大代表當天越會上下震盪；量比＝今日成交量 ÷ 近 20 日平均量；當沖比＝當天當沖成交占總成交量的比例。</p>${L.length?`<div class="tablewrap"><table class="ov"><tr><th>股票</th><th>收盤 / 漲跌</th><th>振幅</th><th>成交值(億)</th><th>量比</th><th>當沖比</th><th>昨日 高／低</th><th>下一日漲停／跌停</th><th>標籤</th></tr>
+  ${L.map(r=>{const x=r.x,lim=tmrLimits(x.close);return `<tr data-pickc="${x.code}" class="clk"><td><b>${x.name}</b><small>${x.code} · ${x.market} · 成交值第 ${r.rk} 名</small></td><td class="num"><b>${fmt(x.close)}</b><small class="${cls(x.change)}">${pcOf(x)==null?'—':zp(pcOf(x))}</small></td>
+   <td class="num"><b>${fmt(r.d.amp,2)}%</b></td><td class="num">${fmt((x.value||0)/1e8,2)}</td><td class="num">${r.vr==null?'—':fmt(r.vr,2)}</td><td class="num">${r.dy==null?'—':fmt(r.dy,1)+'%'}</td><td class="num">${fmt(x.high)} / ${fmt(x.low)}</td><td class="num"><small class="up">${fmt(lim.U)}</small> / <small class="down">${fmt(lim.D)}</small></td><td>${flHtml(x.code)||'<small>—</small>'}</td></tr>`;}).join('')}</table></div>`:'<div class="empty">今日沒有標的符合上列條件（0 檔）。</div>'}
+  <p class="rc-note">資料：證交所／櫃買中心當日收盤行情（成交量、振幅、高低收）、證交所 TWTB4U／櫃買當沖統計（當沖比）、處置與注意股公告（${FL?dfmt(FL.asof):'—'}）。量比取自本站歷史價量。<b>盤中跳空與即時成交量沒有免費的官方資料，這一頁不提供，也不用推算假裝有。</b>漲跌停價依收盤價 ±10% 推算（除權息日以官方公告為準）。</p></div>`;
+  box.querySelectorAll('button[data-dtk]').forEach(b=>b.onclick=()=>{DTW.k=b.dataset.dtk;dtWatchPage();});
+}
+function hotBox(){
+  const el=$('#hotbox');if(!el)return;if(view!=='all'||!ALL.length){el.innerHTML='';return;}
+  const top=ALL.filter(x=>!x.etf&&x.value>0).sort((a,b)=>b.value-a.value).slice(0,5);
+  const vr=MT?ALL.filter(x=>!x.etf&&(vrank()[x.code]||{}).all<=200&&mv(x.code,'volRatio')!=null).sort((a,b)=>mv(b.code,'volRatio')-mv(a.code,'volRatio')).slice(0,5):[];
+  const nd=NW?nwDays().slice(-1)[0]:null;
+  const nws=NW&&nd?Object.entries(NW.items).map(([c,l])=>[c,l.filter(r=>r[0]===nd).length]).filter(q=>q[1]>0&&BYC()[q[0]]).sort((a,b)=>b[1]-a[1]||(BYC()[b[0]].value||0)-(BYC()[a[0]].value||0)).slice(0,5):[];
+  const th=TH&&MT?TH.themes.map(themeAgg).filter(a=>a.avg.v!=null).sort((a,b)=>b.avg.v-a.avg.v).slice(0,3):[];
+  const chip=x=>`<a href="#" class="hotchip" data-pickc="${x.code}"><b>${x.name}</b><small>${x.code}</small></a>`;
+  const col=(t,sub,body)=>`<div class="hotcol"><h4>${t}</h4><small>${sub}</small>${body||'<p class="rc-note">資料不足或沒有符合者（0 檔）。</p>'}</div>`;
+  el.innerHTML=`<div class="rcard hot"><div class="rc-head"><h3>今日熱門</h3><span>官方資料 · 資料日 ${dfmt(META.twseDate)}（不排名次、不是推薦）</span></div><details class="hotdet" ${document.documentElement.classList.contains('m')?'':'open'}><summary>四個熱門榜（成交值、量比、重大訊息、題材）</summary><div class="hotgrid">
+  ${col('成交值前 5','資金最集中的一般股',top.map(x=>`<div class="hotrow">${chip(x)}<span>${fmt(x.value/1e8,1)} 億</span><em class="${cls(x.change)}">${pcOf(x)==null?'—':zp(pcOf(x))}</em></div>`).join(''))}
+  ${col('量比最高（成交值前 200 內）','今日量是 20 日均量的幾倍',vr.map(x=>`<div class="hotrow">${chip(x)}<span>${fmt(mv(x.code,'volRatio'),2)} 倍</span><em class="${cls(x.change)}">${pcOf(x)==null?'—':zp(pcOf(x))}</em></div>`).join(''))}
+  ${col('今日重大訊息（成交值大者優先）',nd?`公開資訊觀測站 · ${dfmt(nd)} 存檔日`:'本站存檔中',nws.map(q=>`<div class="hotrow">${chip(BYC()[q[0]])}<span>${q[1]} 則</span><em></em></div>`).join(''))}
+  ${col('題材平均漲幅前 3','站內人工整理的題材',th.map(a=>`<div class="hotrow"><a href="#" class="hotchip" data-theme="${a.t.id}"><b>${a.t.name}</b><small>${a.rows.length} 檔</small></a><span>${a.up} 漲 / ${a.dn} 跌</span><em class="${cls(a.avg.v)}">${zp(a.avg.v)}</em></div>`).join(''))}
+  </div></details><p class="rc-note">熱門＝成交值、量比、當日重大訊息則數、題材平均漲跌這四個官方／站內計算數字各取前幾名，彼此獨立，沒有綜合評分。量比與題材需歷史價量資料載入後才顯示。</p></div>`;
 }

@@ -389,7 +389,7 @@ html.m table.lvt tbody{display:block}
 html.m table.lvt tr{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:8px 0;border-bottom:1px solid #edf0f6}
 html.m table.lvt tr:first-child{display:none}
 html.m table.lvt td{padding:0;border:0;text-align:left}html.m table.lvt td.num{text-align:right}
-html.m table.lvt td:nth-child(5){grid-column:1 / -1}
+html.m table.lvt td:nth-child(5){grid-column:1 / -1}html.m table.lvt td:nth-child(6){grid-column:1 / -1}
 html.m table.lvt tr.curpx{display:block;padding:6px 8px;border:0}
 @media (min-width:769px){html:not(.m) #detail .levels.l3 .lvrow{grid-template-columns:1fr}html:not(.m) #detail .levels.l3 .lvrow>div:last-child{text-align:left;min-width:0}html:not(.m) #detail .levels.l3 .lvrow>div:last-child em{white-space:normal}}
 
@@ -406,3 +406,20 @@ html.m .lamprow{grid-template-columns:auto 1fr}html.m .lamprow span{grid-column:
 .deephd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:2px 12px}.deephd b{font-size:15px;color:#1f3a8a}.deephd .dh{font-size:12px;color:#7f8ba0}
 .deepsec>details{margin-top:8px}.deepsec>details>.xbody>.xinner>.rcard:first-child{margin-top:4px}
 .whymove{margin-top:10px;border-top:1px dashed #e8d9a8;padding-top:8px}.whymove>small{display:block;color:#9a7b2c;font-size:11px;font-weight:700;margin-bottom:2px}
+
+/* ===== xd24 長線體檢 ===== */
+.hl3w{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:2px 0 12px}
+.hl3{border:1px solid #e6ebf5;border-radius:10px;padding:10px 12px;background:#fff}.hl3 .hlv{margin-left:8px;font-size:11px;color:#7f8ba0}.hl3 b{color:#1f3a8a}.hl3 p{margin:6px 0 0;font-size:12px;color:#5b667a;line-height:1.6}
+.m4.m3h{grid-template-columns:repeat(3,1fr);gap:12px 10px}.m3h b{font-size:18px}.m3h em{font-size:11px;font-style:normal;color:#7f8ba0}
+html.m .hl3w{grid-template-columns:1fr}html.m .m4.m3h{grid-template-columns:1fr 1fr}
+html.m table.lvt td:nth-child(5){text-align:left}
+
+/* ===== xd25 當沖觀察、今日熱門、題材標籤 ===== */
+.dtw-rule{margin:6px 0;padding-left:18px;font-size:13px;color:#46546f;line-height:1.9;columns:2}html.m .dtw-rule{columns:1}
+.dtwtabs{margin:4px 0 8px}
+.hotgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.hotcol h4{margin:0;font-size:14px;color:#1f3a8a}.hotcol>small{display:block;color:#8a95a7;font-size:11px;margin:2px 0 6px}
+.hotrow{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;padding:5px 0;border-top:1px solid #edf0f6;font-size:12px}.hotrow em{font-style:normal;font-weight:600;min-width:52px;text-align:right}
+.hotchip{text-decoration:none;color:#1f2a44;display:inline-flex;flex-direction:column}.hotchip b{font-size:13px}.hotchip small{color:#98a2b3;font-size:10px}
+.thtags{display:block;margin-top:4px}.thtags .pill{margin-right:4px}
+html.m .hotgrid{grid-template-columns:1fr}
+.dtc .m4 b.sm{font-size:15px}
