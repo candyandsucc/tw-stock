@@ -419,7 +419,7 @@ async function pick(code){
   let H=null;if(s.hasHistory){try{H=await fetch(`data/history/${code}.json`).then(r=>r.ok?r.json():null)}catch(e){}}window._H=H;
   const src=`<b>${s.src}</b>`;const inst=s.market==='上市'?(INST.data[code]||[]):null;
   const L=H&&H.levels,close=s.close;
-  let html=`<div class="eyebrow">STOCK INSIGHT <span>${s.market}${s.etf?' · ETF':''} · ${code}</span></div>${grp('一眼結論','今天發生什麼事、有沒有要避開的警示')}
+  let tech='';let html=`<div class="eyebrow">STOCK INSIGHT <span>${s.market}${s.etf?' · ETF':''} · ${code}</span></div>${grp('一眼結論','今天發生什麼事、有沒有要避開的警示')}
   <div class="titleprice"><div><h2>${s.name} <button class="star" style="font-size:18px;color:${W().includes(code)?'#f0a020':'#b8c1cf'}" onclick="toggle('${code}');pick('${code}')">${W().includes(code)?'★':'☆'}</button></h2><p>資料日期 ${dfmt(s.date)}${META&&s.date!==(s.market==='上市'?META.twseDate:META.tpexDate)?'<span class="stalechip">此股資料日早於市場最新日</span>':''} · 來源：${s.src}</p></div>
   <div><strong>${fmt(close)}</strong><span class="${cls(s.change)}">${sg(s.change)}${fmt(s.change)} (${sg(s.change)}${fmt(s.change/(close-s.change)*100)}%)</span></div></div>
   <div class="metrics"><span>開盤<b>${fmt(s.open)}</b></span><span>最高<b>${fmt(s.high)}</b></span><span>最低<b>${fmt(s.low)}</b></span><span>成交量<b>${fmt(s.volume/1000,0)} 張</b></span><span>成交金額<b>${fmt(s.value/1e8)} 億</b></span></div>
@@ -428,13 +428,19 @@ async function pick(code){
   ${chartNotes(H)}<div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
   ${grp('價位怎麼看','支撐、壓力與位階在哪（觀察價位，非買賣建議）· 依 '+dfmt(H.date)+' 收盤')}`;
   if(L){const cf=confluence(H,L);html+=posTrack(s,L)+w52Card(s,H)+lvcards(L,cf,close,H)+`<div id="rrbox">${L.support&&L.support.length?rrHtml(H,L,close):''}</div>`+`<p class="note2 disclaimer">支撐與壓力為本站依歷史價格結構自行計算的觀察價位，可能與其他網站不同，不是目標價或買賣建議。</p>`+(L.limits?`<p class="note2">漲跌停參考（依漲跌幅限制，非結構價位）：明日漲停 ${fmt(L.limits.up)} · 跌停 ${fmt(L.limits.down)}</p>`:'');}
-  const P=H.patterns;if(P&&(P.trend||P.box)){const t=P.trend,b=P.box;html+=`<div class="rcard patt"><div class="rc-head"><h3>形態偵測<small>（觀察用）</small></h3><span>依 ${dfmt(H.date)} 收盤</span></div>
+  const P=H.patterns;if(P&&(P.trend||P.box)){const t=P.trend,b=P.box;tech+=`<div class="rcard patt"><div class="rc-head"><h3>形態偵測<small>（觀察用）</small></h3><span>依 ${dfmt(H.date)} 收盤</span></div>
    ${t?`<div class="sector-line"><span>📈 上升趨勢線（近期低點墊高）</span><b class="${t.state==='守住'?'up':'down'}">${t.state}</b><strong>線約 ${fmt(t.lineToday)}</strong></div><p class="rc-note">近 ${t.sinceDays} 日內最近 3 個波段低點 ${t.points.map(p=>dfmt(p[0]).slice(5)+' '+fmt(p[1])).join(' → ')}，趨勢線每日約 ${t.slopePct>0?'+':''}${fmt(t.slopePct)}%；收盤距趨勢線 ${t.dist>0?'+':''}${fmt(t.dist,1)}%。</p>`:''}
    ${b?`<div class="sector-line"><span>▭ 整理平台（前 ${b.days} 日區間窄）</span><b>${b.state}</b><strong>${fmt(b.low)}–${fmt(b.high)}</strong></div><p class="rc-note">不含今日的前 ${b.days} 個交易日最高 ${fmt(b.high)}、最低 ${fmt(b.low)}，區間寬度 ${fmt(b.width,1)}%。</p>`:''}
    <p class="rc-note sep">形態為依歷史價量自動偵測的觀察標示，不是買賣訊號，也不預測突破方向；偵測規則見下方「計算方法與資料說明」。</p></div>`;}
-  html+=riskHtml(code,H);
-  }else html+=`<div class="card"><h3>價格走勢 / 支撐壓力<span>尚無歷史</span></h3><p class="note2">此股票目前不在每日歷史抓取範圍（主要成交金額前段＋預設清單），因此暫無走勢、均線與支撐壓力（資料不足）。系統每日累積收盤快照，資料足夠後會自動顯示。</p></div>`+grp('價位怎麼看','支撐、壓力與位階在哪（觀察價位，非買賣建議）')+riskHtml(code,null);
-  html+=grp('籌碼與資金','法人、融資券與 ETF 是在買還是在賣')+`<div id="sl-chips"><div class="empty">正在彙整法人與融資資料…</div></div>${s.etf?'<div id="etfpage"><div class="empty">正在載入 ETF 持股明細…</div></div>':''}<div id="sl-etf"></div>`+grp('基本面與產業','估值、營收與所屬產業的資金熱度')+`<div id="sl-fund"></div>`+grp('當沖輔助與資料說明','短線流動性、計算方法與資料來源')+`${dtCard(s)}<div id="sl-dt"></div><div id="sl-meth"></div>`;
+  tech+=riskHtml(code,H);
+  }else html+=`<div class="card"><h3>價格走勢 / 支撐壓力<span>尚無歷史</span></h3><p class="note2">此股票目前不在每日歷史抓取範圍（主要成交金額前段＋預設清單），因此暫無走勢、均線與支撐壓力（資料不足）。系統每日累積收盤快照，資料足夠後會自動顯示。</p></div>`+grp('價位怎麼看','支撐、壓力與位階在哪（觀察價位，非買賣建議）');tech+=riskHtml(code,null);
+  const deep=(id,t,hint,body)=>`<div class="deepsec" id="ds-${id}"><div class="deephd"><b>${t}</b><span class="dh" id="dh-${id}">${hint}</span></div><details class="deepd"><summary>展開${t}</summary>${body}</details></div>`;
+  html+=(s.etf?`<div id="etfpage"><div class="empty">正在載入 ETF 持股明細…</div></div>`:'')+grp('深入分析','技術面、籌碼面、基本面、產業題材與當沖輔助，預設收起，要看再點開')+
+   deep('tech','技術面','形態偵測（趨勢線、整理平台）與風險檢查',tech||'<p class="rc-note">此股票尚無歷史資料，暫無技術面分析。</p>')+
+   deep('chips','籌碼面','法人、融資、借券、大戶與 ETF 買賣','<div id="sl-chips"><div class="empty">正在彙整法人與融資資料…</div></div><div id="sl-etf"></div>')+
+   deep('fund','基本面','估值、月營收、財報與股利','<div id="sl-fund"></div>')+
+   deep('ind','產業與題材','所屬產業的資金熱度與站內題材','<div id="sl-ind"></div>')+
+   deep('dt','當沖輔助與資料說明','短線流動性、計算方法與資料來源',`${dtCard(s)}<div id="sl-dt"></div><div id="sl-meth"></div>`);
   $('#detail').innerHTML=html;bindRR();
   const [C,E]=await Promise.all([CH||(CH=fetch('data/chips.json').then(r=>r.json())),EF||(EF=fetch('data/etf.json').then(r=>r.json())),FDp||(FDp=fetch('data/fund.json').then(r=>r.json()).then(v=>FD=v).catch(()=>null)),RVp||(RVp=fetch('data/rev.json').then(r=>r.json()).then(v=>RV=v).catch(()=>null)),CRp||(CRp=fetch('data/credit.json').then(r=>r.json()).then(v=>CR=v).catch(()=>null)),p2load()]);
   if(sel!==code)return;CH_=C;if(s.etf){const p=$('#etfpage');if(p)p.innerHTML=fundOf(E,code)?etfPage(s,E):`<div class="rcard"><div class="rc-head"><h3>持股明細</h3><span>尚未接入</span></div><p class="rc-note">此 ETF 尚未接入官方持股揭露（見下方「資料涵蓋範圍」），暫無持股明細；不推定內容。</p></div>`;}
@@ -467,7 +473,7 @@ function chipSummary(s){
   <div class="lamps">${o.l.map(x=>`<div class="lamprow"><i class="lamp ${x[2]}" title="${nm[x[2]]}燈"></i><b>${x[1]}</b><span>${esc(x[3])}</span></div>`).join('')}</div>
   <p class="rc-note">${esc(CF.note||'')}</p></div>`;}
 function fillResearch(s,H,C,E){const P=research(s,H,C,E),set=(id,h)=>{const e=$('#'+id);if(e)e.innerHTML=h;};
-  set('sl-verdict',P.verdict);set('sl-chips',chipSummary(s)+P.inst+P.credit+tdccCard(s));set('sl-dt',dyCard(s));set('sl-etf',P.etfh+P.etfc);set('sl-fund',P.fund);set('sl-meth',P.method);}
+  set('sl-verdict',P.verdict);set('sl-chips',chipSummary(s)+P.inst+P.credit+tdccCard(s));set('sl-dt',dyCard(s));set('sl-etf',P.etfh+P.etfc);set('sl-fund',P.fund);set('sl-ind',P.ind);set('sl-meth',P.method);const dh=(id,t)=>{const e=$('#dh-'+id);if(e&&t)e.textContent=t;};dh('chips',P.chipHint);dh('ind',P.indHint);dh('tech',P.techHint);}
 function research(s,H,C,E){
   const close=s.close;let o='';const P={};
   // 產業
@@ -480,15 +486,19 @@ function research(s,H,C,E){
   const cat=i=>D.reduce((a,r)=>a+(r.x?r.x[i]:0),0)/1000;
   // 綜合判讀
   const vrv=H&&H.rows.length>=20?(H.rows.at(-1)[5]/(H.rows.slice(-20).reduce((a,r)=>a+(r[5]||0),0)/20)):null;const lastI=raw.at(-1);const fd=lastI&&got.includes(days.at(-1))?lastI[0]/1000:null;
-  const vline=vrv==null?'':`<li><b>${vrv<1?'成交量縮小':'成交量放大'}</b> 成交量約為近 20 日均量的 ${fmt(vrv)} 倍。</li>`;
-  const fline=fd==null?'':`<li><b>${fd>=0?'外資買超':'外資賣超'}</b> 外資（含陸資、外資自營商）${dfmt(days.at(-1))} 合計 ${fmt(Math.abs(fd),0)} 張。</li>`;
-  o+=`<div class="rcard verdict"><div class="rc-head"><h3>綜合判讀</h3><span>${dfmt(s.date)} 收盤</span></div><h4>${indName||(s.etf?'ETF':'產業資料待確認')}${rk?` · 同日成交金額第 ${rk} 名`:''}</h4><p>個股成交 ${fmt(s.value/1e8)} 億元。${D.length?`近 ${D.length} 日法人買超 ${buy} 日，合計 ${z(sum)} 張。`:'官方資料未提供此股票的法人買賣超。'}</p><ul class="vl">${vline}${fline}</ul>${verdictRows(s,H,C,E)}</div>`;
+  const pcs=s.change!=null&&close-s.change?s.change/(close-s.change)*100:null;
+  const adr=H&&H.rows.length>=21?H.rows.slice(-20).reduce((a,r,k,arr)=>{const p=(H.rows.length-20+k-1);return a+Math.abs(r[4]/H.rows[p][4]-1)*100},0)/20:null;
+  const pline=pcs==null?`<li><b>今日漲跌</b> 官方未提供前收，無法計算。</li>`:`<li><b>今日${pcs>=0?'上漲':'下跌'} ${fmt(Math.abs(pcs),2)}%</b>：收 ${fmt(close)}，較前收 ${s.change>=0?'+':'−'}${fmt(Math.abs(s.change))}${adr?`；近 20 日平均單日漲跌幅約 ${fmt(adr,2)}%，今天約為其 ${fmt(Math.abs(pcs)/adr,1)} 倍`:''}。</li>`;
+  const vline=vrv==null?`<li><b>成交量</b> 歷史不足，無法計算與 20 日均量的倍數。</li>`:`<li><b>${vrv<1?'成交量縮小':'成交量放大'}</b> 成交量約為近 20 日均量的 ${fmt(vrv)} 倍。</li>`;
+  const fline=fd==null?`<li><b>外資買賣超</b> 官方未提供此股票當日的外資資料。</li>`:`<li><b>${fd>=0?'外資買超':'外資賣超'}</b> 外資（含陸資、外資自營商）${dfmt(days.at(-1))} 合計 ${fmt(Math.abs(fd),0)} 張。</li>`;
+  o+=`<div class="rcard verdict"><div class="rc-head"><h3>綜合判讀</h3><span>${dfmt(s.date)} 收盤</span></div><h4>${indName||(s.etf?'ETF':'產業資料待確認')}${rk?` · 同日成交金額第 ${rk} 名`:''}</h4><p>個股成交 ${fmt(s.value/1e8)} 億元。${D.length?`近 ${D.length} 日法人買超 ${buy} 日，合計 ${z(sum)} 張。`:'官方資料未提供此股票的法人買賣超。'}</p><div class="whymove"><small>今天為什麼動</small><ul class="vl">${pline}${vline}${fline}</ul></div>${verdictRows(s,H,C,E)}</div>`;
   P.verdict=o;o='';
   o+=fundHtml(s,H)+valCard(s)+finCard(s)+divCard(s);
+  P.fund=o;o='';
   o+=`<div class="rcard"><div class="rc-head"><h3>產業熱度</h3><span>依官方產業分類</span></div>${indName?`<div class="sector-line"><span>${indName}</span><b>第 ${rk} / ${ranks.length}</b><strong>${fmt(agg[s.ind].v/1e8)} 億</strong></div>
    <p class="rc-note">${dfmt(s.date)} 同日已取得行情，分類內 ${agg[s.ind].n} 檔。排名依${s.market}成交金額，不代表資金淨流入。來源：${s.market==='上市'?'證交所 t187ap03_L':'櫃買中心 mopsfin_t187ap03_O'}（產業別）＋ 每日收盤行情。</p>`:`<p class="rc-note">官方資料未提供此證券的產業別（ETF 等不列入公司基本資料）。</p>`}
    ${themeCard(s.code)||'<p class="rc-note sep">此股票未歸入站內題材清單（題材為站內人工整理，非官方分類）。</p>'}</div>`;
-  P.fund=o;o='';
+  P.ind=o;o='';
   // 位置（已與上方支撐壓力合併，這裡只保留變數）
   // 法人 20 日
   const mx=Math.max(1,...D.map(r=>Math.abs(tot(r))));const srcI=s.market==='上市'?C.sources.instTwse:C.sources.instTpex;
@@ -507,10 +517,13 @@ function research(s,H,C,E){
   P.etfh=s.etf&&fundOf(E,s.code)?'':etfHolders(s,E,C);
   P.etfc=etfCoverage(E);
   o+=`<details class="method"><summary>查看計算方法與資料說明</summary>
-   <p>支撐壓力不是目標價、不是買賣建議，也不代表適合追價。價位全部來自真實歷史成交結構：近 120 個交易日的波段高低點（前後各 2 日確認）與量能K（成交量 ≥ 前 20 日均量 1.5 倍）的最高、最低價；高點被突破超過 1% 後不再當壓力；支撐被跌破時結構轉弱。相鄰結構落在同一波動容差（1.6%）內合併為同一價格帶，不硬拆兩區；價位皆依台股升降單位取整。支撐：現價下方 0～10% 標示近端、10～20% 標示中期、超過 20% 列為長期結構。支撐候選包含波段低點、缺口邊緣、MA5／MA20、近 20 日高低點與量能K。壓力：第一壓力帶之上的下一個獨立結構，若已超過 +10% 則保留、改標中期壓力。近 10 日高點落在第一壓力帶時，標為「關鍵突破／壓力共振區」。找不到真實結構就顯示「尚未形成」，不以公式補值；「資料不足」表示來源資料不足以計算。創新高時顯示明日漲停參考價（依漲跌幅限制，非結構價位）。</p>
+   <p>支撐壓力（v2）不是目標價、不是買賣建議，也不代表適合追價。候選價位都來自真實歷史成交結構，每個都帶「依據」標籤：前波高點／前高轉支撐（前後各 2 日確認）、近期高點與近 3 日爆量K高點（尚未確認，標「暫定」）、前波低點（只當支撐，不當壓力）、爆量K高低點（成交量 ≥ 前 20 日均量 1.5 倍）、成交量密集區（近 60 日價量分布的高峰）、未回補缺口邊緣、MA5／20／60／120 反壓或支撐、整理平台與量縮、均線多頭結構、借券賣壓累積與融資追價過熱（第一壓力帶，官方籌碼資料）。價格帶寬度依該股 14 日平均真實波幅調整（支撐 0.25 倍、壓力 0.55 倍，限制在 0.8%–3.5%），自現價往外把相鄰候選合併；<b>共振強度＝同一價格帶內不同依據的種類數</b>：1 招弱、2 招中、3 招強、4 招以上極強，只代表「這個位置有多少種理由」，不保證守住或壓回。顯示的價位是靠近現價的那一端（支撐＝帶上緣、壓力＝帶下緣），旁邊另列整段價格帶，依升降單位取整。壓力：弱／中（≤2 招）且距現價不到 1% 的列為小字，第一壓力取其後第一個帶；第二壓力需與第一壓力帶隔開（至少 2%，依波動放大）；兩者之間列入「其他結構價位」；現價上方 +10% 以外最多列 3 個中長期結構價位。支撐：0～−10% 為近端、−10～−20% 為中期、−20% 以外為長期結構。每個帶另標過去一年碰到與守住（或受阻、突破）的次數。找不到結構就顯示「尚未形成」，不以公式補值；創新高時顯示明日漲停參考價（非結構價位）。「布局參考區」是本站自行以近 60 日成交量分布算出的集中區，不是其他網站的算法。</p>
    <p>量比＝最新日成交量 ÷ 近 20 日均量（含當日）。均線與走勢以歷史資料最後一日為準。重大除權（官方除權息參考價 ÷ 前收 ≤ 0.9，如股票分割）已依證交所 TWT49U／櫃買中心 exDailyQ 還原，一般現金股息（通常小於 5%）未還原，相關價位需另行判讀。</p><p>形態偵測：①上升趨勢線＝近 60 日內最近 3 個波段低點（前後各 2 日確認）依序墊高且首尾相距 ≥ 15 日，以最小平方法擬合，收盤距線 ≥ -1.5% 為守住、否則為跌破；②整理平台＝不含今日的前 N 日（N=20／15／10）最高最低價區間寬度 ≤ 12%（N=20）或 9%（N≤15），再依今日收盤標示平台內、突破上緣或跌破下緣。皆為觀察用標示，不是買賣訊號。</p>
    <p>資料來源：臺灣證券交易所 OpenAPI／網站資料（STOCK_DAY_ALL、STOCK_DAY、T86、MI_MARGN、t187ap03_L）與櫃買中心 OpenAPI／網站資料（每日收盤行情、個股日成交、三大法人、融資融券餘額、mopsfin_t187ap03_O）；ETF 持股取自各投信官網公開持股（元大、群益、復華、野村、統一、富邦、凱基、永豐、兆豐、台新，國泰嘗試中）。法人單位為千股換算張，日期獨立標示。每個交易日 22:00（台北）自動更新。</p>
    <p>技術價位是研究參考，不是目標價或買賣指示；不保證價格守住支撐或突破壓力。</p></details>`;
+  const cf=CF&&CF.items&&CF.items[s.code];if(cf&&cf.l){const c={g:0,y:0,r:0,n:0};cf.l.forEach(x=>c[x[2]]++);P.chipHint=`綠 ${c.g} · 黃 ${c.y} · 紅 ${c.r} · 灰 ${c.n}（籌碼燈號）${cf.sblAcc?'｜借券賣壓累積':''}${cf.mHot?'｜融資追價過熱':''}`;}
+  P.indHint=indName?`${indName}${rk?` · 同日成交金額第 ${rk} 名`:''}`:'官方未提供產業別';
+  const pt=H&&H.patterns;if(pt){const a=[];if(pt.trend)a.push('上升趨勢線：'+pt.trend.state);if(pt.box)a.push('整理平台：'+pt.box.state);P.techHint=a.length?a.join('｜'):'目前未偵測到明確趨勢線或整理平台';}
   P.method=o;return P;
 }
 

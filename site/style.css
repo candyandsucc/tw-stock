@@ -400,3 +400,9 @@ html.m table.lvt tr.curpx{display:block;padding:6px 8px;border:0}
 .flagtag{background:#fde4e1;color:#b3261e;border-radius:999px;padding:0 9px;font-weight:700;font-size:12px}
 .lamprow{display:grid;grid-template-columns:auto 76px 1fr;gap:4px 8px;align-items:start;padding:8px 0;border-top:1px solid #edf0f6;font-size:13px}.lamprow:first-child{border-top:0}.lamprow .lamp{margin:4px 0 0}.lamprow b{color:#46546f}.lamprow span{color:#5b667a;line-height:1.6}
 html.m .lamprow{grid-template-columns:auto 1fr}html.m .lamprow span{grid-column:1 / -1;padding-left:19px}
+
+/* ===== xd23 個股頁：深入分析（預設收起）與今天為什麼動 ===== */
+.deepsec{border:1px solid #e6ebf5;border-radius:12px;background:#fbfcfe;padding:12px 16px;margin-top:12px}
+.deephd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:2px 12px}.deephd b{font-size:15px;color:#1f3a8a}.deephd .dh{font-size:12px;color:#7f8ba0}
+.deepsec>details{margin-top:8px}.deepsec>details>.xbody>.xinner>.rcard:first-child{margin-top:4px}
+.whymove{margin-top:10px;border-top:1px dashed #e8d9a8;padding-top:8px}.whymove>small{display:block;color:#9a7b2c;font-size:11px;font-weight:700;margin-bottom:2px}
