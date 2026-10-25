@@ -1,0 +1,40 @@
+name: 盤前更新（期交所夜盤、匯率、美債）
+on:
+  schedule:
+    - cron: "30 23 * * 0-4"   # 台北時間 週一至週五 07:30（美股收盤後、台股開盤前）
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency: { group: daily, cancel-in-progress: false }
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - name: 抓取（各步驟互相隔離，失敗只保留前次資料，不讓工作流失敗）
+        run: |
+          python -c "import sys; sys.path.insert(0,'scripts'); import extra; extra.main('taifex'); extra.main('macro')" || echo "盤前抓取異常，保留前次資料"
+      - name: Commit data
+        run: |
+          git config user.name "tw-stock-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add site/data/futures.json site/data/macro.json snapshots/fut
+          if git diff --cached --quiet; then echo "資料無變動，略過 commit"; exit 0; fi
+          git commit -m "data: premarket $(TZ=Asia/Taipei date '+%F %H:%M')"
+          git pull --rebase -X theirs origin main
+          git push
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with: { path: site }
+  deploy:
+    needs: update
+    runs-on: ubuntu-latest
+    environment: { name: github-pages, url: "${{ steps.d.outputs.page_url }}" }
+    steps:
+      - id: d
+        uses: actions/deploy-pages@v4

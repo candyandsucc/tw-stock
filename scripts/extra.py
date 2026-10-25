@@ -725,8 +725,134 @@ def daytrade():
           sources=dict(twse="https://www.twse.com.tw/zh/trading/day-trading/twtb4u.html", tpex="https://www.tpex.org.tw/zh-tw/mainboard/trading/intraday/statistics.html")))
     print("daytrade ok", got[0], got[-1], len(got), "stocks", len(items))
 
+# ============ 第三批：大盤、期交所（台指期夜盤日盤、美股／國際指數期貨）、匯率與美債殖利率 ============
+def _raw(url, tries=3, enc="utf-8-sig"):
+    for i in range(tries):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers=UA), timeout=60) as r: return r.read().decode(enc, "replace")
+        except Exception as e:
+            print("retry", url, e); time.sleep(2 * (i + 1))
+    return None
+def _old(name):
+    try: return json.loads((OUT / name).read_text())
+    except Exception: return {}
+def _iso8(s):   # 20261022 -> 2026-10-22
+    s = str(s).strip(); return f"{s[:4]}-{s[4:6]}-{s[6:]}" if len(s) == 8 and s.isdigit() else None
+
+def market():
+    """大盤：證交所 FMTQIK（加權指數、成交股數／金額／筆數，近兩個月）＋ 櫃買 tpex_daily_trading_index（櫃買指數與成交量值）＋ 漲跌家數（證交所 MI_INDEX type=MS「漲跌證券數合計」、櫃買 tpex_mainborad_highlight）。漲跌家數每日存入 breadth 累積。輸出 market.json。"""
+    meta, _ = _stocks(); old = _old("market.json"); today = now().date()
+    tw = {}
+    for k in (1, 0):
+        y, m = (today.year, today.month - k) if today.month - k >= 1 else (today.year - 1, 12 + today.month - k)
+        j = get(f"https://www.twse.com.tw/rwd/zh/afterTrading/FMTQIK?date={y}{m:02d}01&response=json", tries=2); time.sleep(SLEEP)
+        for r in (j or {}).get("data", []) if j and j.get("stat") == "OK" else []:
+            d = _roc_cn(r[0]) or roc8(r[0].replace("/", ""))
+            tw[d] = dict(d=d, close=num(r[4]), chg=num(r[5]), vol=num(r[1]), val=num(r[2]), txn=num(r[3]))
+    tp = {}
+    j = get("https://www.tpex.org.tw/openapi/v1/tpex_daily_trading_index")
+    for r in j or []:
+        d = roc8(r["Date"]); tp[d] = dict(d=d, close=num(r["TPExIndex"]), chg=num(r["Change"]), vol=num(r["TradeVolume"]), val=num(r["TradeAmount"]), txn=num(r["NumberOfTransactions"]))
+    if not tw and not tp: raise RuntimeError("加權與櫃買大盤資料皆取不到")
+    twL = sorted(tw.values(), key=lambda x: x["d"])[-45:]; tpL = sorted(tp.values(), key=lambda x: x["d"])[-45:]
+    # 漲跌家數
+    br = dict(old.get("breadth") or {})
+    td = twL[-1]["d"] if twL else None
+    if td:
+        j = get(f"https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={td.replace('-', '')}&type=MS&response=json", tries=2); time.sleep(SLEEP)
+        t = next((t for t in (j or {}).get("tables", []) if t.get("title") == "漲跌證券數合計"), None)
+        if t:
+            def pr(x):
+                m = re.match(r"\s*([\d,]+)(?:\((\d+)\))?", str(x)); return (int(m[1].replace(",", "")), int(m[2] or 0)) if m else (None, 0)
+            rows = {r[0].split("(")[0]: r for r in t["data"]}
+            b = dict(d=td, mkt={"up": pr(rows["上漲"][1]), "dn": pr(rows["下跌"][1]), "flat": pr(rows["持平"][1])[0], "none": pr(rows["未成交"][1])[0]},
+                     stk={"up": pr(rows["上漲"][2]), "dn": pr(rows["下跌"][2]), "flat": pr(rows["持平"][2])[0], "none": pr(rows["未成交"][2])[0]})
+            br.setdefault("twse", {})[td] = b
+    j = get("https://www.tpex.org.tw/openapi/v1/tpex_mainborad_highlight")
+    if j:
+        r = j[-1]; d = roc8(r["Date"])
+        br.setdefault("tpex", {})[d] = dict(d=d, up=(int(r["PriceRiseCompanyNumbers"]), int(r["LimitUpCompanyNumbers"])), dn=(int(r["PriceDeclineCompanyNumbers"]), int(r["LimitDownCompanyNumbers"])), flat=int(r["PriceFlatCompanyNumbers"]), none=int(r["UnmatchedCompanyNumbersSuspensionStocksIncluded"]))
+    for k in ("twse", "tpex"):
+        if k in br: br[k] = dict(sorted(br[k].items())[-60:])
+    wjson("market.json", dict(twse=twL, tpex=tpL, breadth=br, asof=dict(twse=twL[-1]["d"] if twL else None, tpex=tpL[-1]["d"] if tpL else None), updated=now().isoformat(timespec="seconds"),
+          sources=dict(twse="https://www.twse.com.tw/zh/trading/historical/fmtqik.html；MI_INDEX 大盤統計資訊", tpex="https://www.tpex.org.tw/openapi/v1/tpex_daily_trading_index；tpex_mainborad_highlight"),
+          note="加權指數與成交量值取自證交所 FMTQIK（成交值含一般股票、ETF、權證等全部證券）；櫃買指數與成交量值取自櫃買中心；漲跌家數：證交所取「股票」欄（整體市場欄含權證等，一併保存）、櫃買為上櫃公司家數；括號內為漲停／跌停家數。漲跌家數官方只給當日，自本站開始存檔起逐日累積。"))
+    print("market ok", twL[-1]["d"] if twL else None, tpL[-1]["d"] if tpL else None, "breadth days", {k: len(v) for k, v in br.items()})
+
+FUT_NAMES = {"TX": "臺股期貨（台指期）", "UDF": "美國道瓊期貨", "SPF": "美國標普500期貨", "UNF": "美國那斯達克100期貨", "SOF": "美國費城半導體期貨", "TJF": "東證期貨（日本）", "GDF": "黃金期貨", "BRF": "布蘭特原油期貨"}
+def taifex():
+    """期交所 OpenAPI DailyMarketReportFut（期貨每日交易行情；TradingSession 分「一般」＝日盤、「盤後」＝夜盤）。取臺股期貨與期交所掛牌的美股指數期貨（道瓊、標普500、那斯達克100、費半）、東證、黃金、布蘭特原油期貨，近月契約。逐日存檔 snapshots/fut/ 累積走勢。輸出 futures.json。"""
+    FD = SNAP / "fut"; FD.mkdir(parents=True, exist_ok=True)
+    j = get("https://openapi.taifex.com.tw/v1/DailyMarketReportFut")
+    if not j: raise RuntimeError("期貨每日交易行情取不到")
+    def f(x): return None if x in (None, "", "-", "NULL") else num(x)
+    by = {}
+    for r in j:
+        c = r["Contract"]
+        if c in FUT_NAMES and re.match(r"^\d{6}$", r["ContractMonth(Week)"]): by.setdefault(c, {}).setdefault(r["ContractMonth(Week)"], {})[r["TradingSession"]] = r
+    snap = {}
+    for c, mm in by.items():
+        for mo in sorted(mm):      # 近月：最近且有報價的月份
+            ss = mm[mo]
+            if any(f(r["Last"]) is not None for r in ss.values()):
+                row = {}
+                for sess, key in (("一般", "day"), ("盤後", "night")):
+                    r = ss.get(sess)
+                    if r and f(r["Last"]) is not None:
+                        row[key] = dict(d=_iso8(r["Date"]), o=f(r["Open"]), h=f(r["High"]), l=f(r["Low"]), c=f(r["Last"]), chg=f(r["Change"]), pct=num(r["%"]), v=f(r["Volume"]), oi=f(r["OpenInterest"]), st=f(r["SettlementPrice"]))
+                snap[c] = dict(m=mo, **row); break
+    dates = sorted({v[k]["d"] for v in snap.values() for k in ("day", "night") if k in v})
+    if not dates: raise RuntimeError("期貨行情無有效報價")
+    latest = dates[-1]
+    (FD / f"{latest}.json").write_text(json.dumps(snap, ensure_ascii=False, separators=(",", ":")))
+    for p in sorted(FD.glob("*.json"))[:-60]: p.unlink()
+    hist = {}
+    for p in sorted(FD.glob("*.json")):
+        for c, v in json.loads(p.read_text()).items():
+            hist.setdefault(c, []).append([p.stem, (v.get("day") or {}).get("c"), (v.get("night") or {}).get("c"), (v.get("day") or {}).get("pct"), (v.get("night") or {}).get("pct")])
+    wjson("futures.json", dict(date=latest, items=snap, names=FUT_NAMES, hist=hist, updated=now().isoformat(timespec="seconds"),
+          note="資料取自期交所 OpenAPI DailyMarketReportFut：「日盤」＝一般交易時段（08:45–13:45），「夜盤」＝盤後交易時段（前一日 15:00 至當日 05:00，屬同一交易日）。美股指數期貨為期交所掛牌商品（反映美股盤勢，但成交清淡，價格與美股現貨指數有基差），僅供參考，不是美股收盤指數。期貨每日行情官方只給最新交易日，走勢自本站開始存檔起逐日累積。",
+          source="https://openapi.taifex.com.tw/v1/DailyMarketReportFut"))
+    print("taifex ok", latest, {c: (v["m"], "day" in v, "night" in v) for c, v in snap.items()})
+
+def macro():
+    """匯率與美債殖利率：美元兌新台幣、日圓取自期交所「每日外幣參考匯率」（DailyForeignExchangeRates）；韓元取自中央銀行 BP01D01 日資料（央行資料更新較慢，標註實際日期）；美國公債殖利率取自美國財政部 Daily Treasury Par Yield Curve Rates（XML）。輸出 macro.json。"""
+    old = _old("macro.json"); out = dict(old)
+    fx = get("https://openapi.taifex.com.tw/v1/DailyForeignExchangeRates")
+    if fx:
+        rows = sorted(fx, key=lambda r: r["Date"])[-45:]
+        out["fx"] = dict(days=[_iso8(r["Date"]) for r in rows], ntd=[num(r["USD/NTD"]) for r in rows], jpy=[num(r["USD/JPY"]) for r in rows], cny=[num(r["USD/RMB"]) for r in rows], eur=[num(r["EUR/USD"]) for r in rows],
+                         source="https://openapi.taifex.com.tw/v1/DailyForeignExchangeRates（期交所每日外幣參考匯率）")
+    cb = None
+    try:
+        import ssl
+        ctx = ssl.create_default_context(); ctx.verify_flags &= ~getattr(ssl, "VERIFY_X509_STRICT", 0)   # 央行憑證缺 Subject Key Identifier，Python 3.13 嚴格模式會拒絕；仍完整驗證憑證鏈
+        with urllib.request.urlopen(urllib.request.Request("https://cpx.cbc.gov.tw/API/DataAPI/Get?FileName=BP01D01", headers=UA), timeout=60, context=ctx) as rr: cb = json.loads(rr.read().decode("utf-8-sig"))
+    except Exception as e: print("cbc fetch fail", type(e).__name__, e)
+    try:
+        ds = cb["data"]["dataSets"]; r = ds[-1]
+        out["cbc"] = dict(d=_iso8(r[0]), ntd=num(r[1]), jpy=num(r[2]), krw=num(r[5]), cny=num(r[8]), updated=cb["meta"].get("last_updated"),
+                          days=[_iso8(x[0]) for x in ds[-30:]], ntdS=[num(x[1]) for x in ds[-30:]], krwS=[num(x[5]) for x in ds[-30:]],
+                          source="https://cpx.cbc.gov.tw/API/DataAPI/Get?FileName=BP01D01（中央銀行 我國與主要貿易對手通貨對美元之匯率，日資料為台灣 16:00 銀行間即期）")
+    except Exception as e: print("cbc fail", type(e).__name__, e)
+    ty = {}; tag = lambda k, r: (re.search(rf"<d:{k}[^>]*>([^<]*)</d:{k}>", r) or [None, None])[1]
+    for k in (1, 0):
+        y, m = (now().year, now().month - k) if now().month - k >= 1 else (now().year - 1, 12 + now().month - k)
+        x = _raw(f"https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve&field_tdr_date_value_month={y}{m:02d}", tries=2)
+        for r in re.findall(r"<m:properties>(.*?)</m:properties>", x or "", re.S):
+            d = (tag("NEW_DATE", r) or "")[:10]
+            if d: ty[d] = {k2: num(tag(k2, r)) for k2 in ("BC_3MONTH", "BC_2YEAR", "BC_5YEAR", "BC_10YEAR", "BC_30YEAR")}
+    if ty:
+        ds = sorted(ty)[-45:]
+        out["ust"] = dict(days=ds, y3m=[ty[d]["BC_3MONTH"] for d in ds], y2=[ty[d]["BC_2YEAR"] for d in ds], y5=[ty[d]["BC_5YEAR"] for d in ds], y10=[ty[d]["BC_10YEAR"] for d in ds], y30=[ty[d]["BC_30YEAR"] for d in ds],
+                          source="https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml?data=daily_treasury_yield_curve（美國財政部 Daily Treasury Par Yield Curve Rates）")
+    if not ({"fx", "ust", "cbc"} & set(out) - set(old)) and not (fx or ty): raise RuntimeError("匯率與殖利率來源皆取不到")
+    out["updated"] = now().isoformat(timespec="seconds")
+    wjson("macro.json", out)
+    print("macro ok", "fx", (out.get("fx") or {}).get("days", [None])[-1:], "ust", (out.get("ust") or {}).get("days", [None])[-1:], "cbc", (out.get("cbc") or {}).get("d"))
+
 def main(which="all"):
-    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, events=events, metrics=metrics, fin=fin, dividends=dividends, valhist=valhist, tdcc=tdcc, daytrade=daytrade)
+    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, events=events, metrics=metrics, fin=fin, dividends=dividends, valhist=valhist, tdcc=tdcc, daytrade=daytrade, market=market, taifex=taifex, macro=macro)
     for k, fn in steps.items():
         if which in ("all", k):
             try: fn()

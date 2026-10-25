@@ -652,7 +652,7 @@ const inst5=c=>{const i=CS&&CS.items[c]&&CS.items[c].i;return i?i[3]+i[5]+i[7]:n
 const themesOf=c=>TH?TH.themes.filter(t=>t.codes.includes(c)):[];
 const themeSet=()=>themeSet._s||(themeSet._s=new Set(TH?TH.themes.flatMap(t=>t.codes):[]));
 function setView(v){document.querySelectorAll('.nav').forEach(x=>x.classList.toggle('active',x.dataset.view===v));view=v;$('#side').classList.remove('open');render();runView();}
-function runView(){const f={w25:overview,theme:themePage,cal:calPage,etfagg:etfAggPage}[view];if(f){f();toDetail();}}
+function runView(){const f={w25:overview,theme:themePage,cal:calPage,etfagg:etfAggPage,mkt:mktPage}[view];if(f){f();toDetail();}}
 document.addEventListener('click',e=>{const a=e.target.closest('[data-theme]');if(a){e.preventDefault();THSEL=a.dataset.theme;setView('theme');}
   const g=e.target.closest('[data-pickc]');if(g){e.preventDefault();pick(g.dataset.pickc);toDetail();}});
 const srcNote=t=>`<p class="note2">${t}</p>`;
@@ -680,7 +680,7 @@ function themePage(){
    <td class="num">${a.f5.v==null?'<small>資料不足</small>':`<b class="${cls(a.f5.v)}">${sgn(a.f5.v)}</b><small>${a.f5.n} 檔</small>`}</td><td class="num">${a.i5.v==null?'<small>資料不足</small>':`<b class="${cls(a.i5.v)}">${sgn(a.i5.v)}</b><small>${a.i5.n} 檔</small>`}</td><td class="num"><b class="up">${a.up}</b> / <b class="down">${a.dn}</b><small>漲 / 跌</small></td></tr>`).join('')}</table></div>
   <p class="rc-note">平均為等權平均（每檔同權重）；5／20 日表現由站內歷史收盤計算，只含有歷史資料的成員（欄內標示檔數）；成交占比＝題材成員當日成交值 ÷ 全市場（上市＋上櫃含 ETF）成交值，一檔可屬多個題材，各題材占比相加可超過 100%；法人買賣超取自證交所 T86／櫃買三大法人，近 5 個已取得交易日合計。</p></div>
   ${grp(sel.t.name+' 成員','點股票名稱開啟個股頁')}
-  <div class="rcard"><div class="rc-head"><h3>${sel.t.name}</h3><span>${sel.t.desc}</span></div>
+  <div class="rcard"><div class="rc-head"><h3>${sel.t.name}</h3><span>${sel.t.desc}</span></div>${usBlock([sel.t],false)}
   <div class="tablewrap"><table class="ov"><tr><th>股票</th><th>收盤 / 漲跌</th><th>5 日</th><th>20 日</th><th>成交值<small>億元</small></th><th>外資 5 日<small>張</small></th><th>法人 5 日<small>張</small></th><th>連買連賣</th><th>標記</th></tr>
   ${M.map(r=>{const x=r.x;return `<tr data-pickc="${x.code}" class="clk"><td><b>${x.name}</b><small>${x.code} · ${x.market}${x.etf?' · ETF':''}</small></td><td class="num"><b>${fmt(x.close)}</b><small class="${cls(x.change)}">${r.p==null?'—':zp(r.p)}</small></td>
    <td class="num ${cls(r.r5)}">${r.r5==null?'<small>資料不足</small>':zp(r.r5)}</td><td class="num ${cls(r.r20)}">${r.r20==null?'<small>資料不足</small>':zp(r.r20)}</td><td class="num">${fmt((x.value||0)/1e8,2)}</td>
@@ -690,7 +690,7 @@ function themePage(){
   box.querySelectorAll('tr[data-th]').forEach(r=>r.onclick=()=>{THSEL=r.dataset.th;themePage();});
   box.querySelectorAll('th[data-tk]').forEach(h=>{const f=()=>{TS=TS.k===h.dataset.tk?{k:TS.k,d:-TS.d}:{k:h.dataset.tk,d:-1};themePage();};h.onclick=f;h.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();f();}};});
 }
-const themeCard=c=>{const ts=themesOf(c);if(!ts.length)return '';return `<p class="rc-note thm">站內題材歸類（人工整理，非官方分類）：${ts.map(t=>`<a href="#" class="pill" data-theme="${t.id}">${t.name}</a>`).join(' ')}</p>`;};
+const themeCard=c=>{const ts=themesOf(c);if(!ts.length)return '';return `<p class="rc-note thm">站內題材歸類（人工整理，非官方分類）：${ts.map(t=>`<a href="#" class="pill" data-theme="${t.id}">${t.name}</a>`).join(' ')}</p>${usBlock(ts,true)}`;};
 
 /* ---- 日程日曆：除權息（TWT48U／櫃買預告表）、法說會（重大訊息「召開法人說明會」）、財報法定申報期限 ---- */
 function calItems(){if(!EV)return [];const w=W(),tset=themeSet(),L=[];
@@ -784,7 +784,7 @@ Object.assign(SORTS,{
 
 /* ================= 第二批（段二）：重大訊息、財報、股利／填息、估值分位、集保大戶、當沖比 ================= */
 let FI=null,DV=null,VH=null,TD=null,DY=null,P2p=null;
-const p2load=()=>P2p||(P2p=Promise.all([['fin',v=>FI=v],['div',v=>DV=v],['valhist',v=>VH=v],['tdcc',v=>TD=v],['daytrade',v=>DY=v]].map(([n,f])=>fetch('data/'+n+'.json').then(r=>r.json()).then(f).catch(()=>null))));
+const p2load=()=>P2p||(P2p=Promise.all([['fin',v=>FI=v],['futures',v=>FU=v],['div',v=>DV=v],['valhist',v=>VH=v],['tdcc',v=>TD=v],['daytrade',v=>DY=v]].map(([n,f])=>fetch('data/'+n+'.json').then(r=>r.json()).then(f).catch(()=>null))));
 const esc=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const nwSrc='<a href="https://mops.twse.com.tw/mops/web/t05sr01_1" target="_blank" rel="noreferrer">公開資訊觀測站 重大訊息 ↗</a>';
 const nwDays=()=>(NW&&NW.days||[]).slice().sort();
@@ -939,4 +939,96 @@ function verdictRows(s,H,C,E){
   else sum=pos.length&&neg.length?`整體中性、多空互見：${pos.join('、')}，但${neg.join('、')}。`:pos.length||neg.length?`整體中性：${(pos.length?pos:neg).join('、')}，其餘項目沒有明顯方向。`:'整體中性，沒有明顯的多空訊號。';
   if(D.risk&&D.risk[4])sum+='另有風險提醒，見下方。';
   return `<div class="vjd"><div class="vsum"><b class="vdir ${dir==='偏多'?'up':dir==='偏空'?'down':''}">${dir}</b><span>${sum}</span></div><div class="vrows">${rows.map(([t,h,,,w])=>`<div class="vrow ${t==='風險'?(w?'bad':'ok'):''}"><span class="vtag">${t}</span><span class="vtx">${h}</span></div>`).join('')}</div><p class="vsm">依站內指標自動產生的資料判讀，僅描述資料，非買賣建議。</p></div>`;
+}
+
+
+/* ================= 第三批：盤前總覽（大盤、台指期夜盤日盤、美股／國際期貨、匯率美債、事件行事曆）與美股連動對照 ================= */
+let MK=null,FU=null,MC=null,MCAL=null;
+['market','futures','macro','macro_calendar'].forEach(n=>fetch('data/'+n+'.json').then(r=>r.json()).then(v=>{({market:()=>MK=v,futures:()=>FU=v,macro:()=>MC=v,macro_calendar:()=>MCAL=v})[n]();if(view==='mkt')mktPage();if(sel)try{pick(sel)}catch(e){}}).catch(()=>{}));
+const ppc=(chg,close)=>chg==null||close==null||!(close-chg)?null:chg/(close-chg)*100;
+const ycls=v=>v>0?'up':v<0?'down':'flat';
+const fuS=(c,k)=>FU&&FU.items&&FU.items[c]&&FU.items[c][k];
+const fuTag=(c,k)=>{const r=fuS(c,k);return r?`<b class="${ycls(r.pct)}">${zp(r.pct,2)}</b>`:'<small>無資料</small>';};
+const fuTime=()=>FU?`期交所交易日 ${dfmt(FU.date)}，本站抓取 ${(FU.updated||'').replace('T',' ').slice(5,16)}（台北）`:'';
+function usBlock(ths,inStock){
+  const codes=[...new Set(ths.flatMap(t=>t.us||[]))];if(!codes.length)return '';
+  const names=[...new Set(ths.filter(t=>t.usn).map(t=>t.usn))].join('；');
+  if(!FU)return `<p class="rc-note usl"><b>美股連動（站內整理）：</b>期交所期貨資料載入失敗，無資料。</p>`;
+  const rows=codes.map(c=>{const n=fuS(c,'night'),d=fuS(c,'day');return `<span class="usi"><b>${FU.names[c].replace('美國','').replace('期貨','')}期貨</b> 夜盤 ${fuTag(c,'night')}${n?' <small>'+dmd(n.d)+'</small>':''}・日盤 ${fuTag(c,'day')}${d?' <small>'+dmd(d.d)+'</small>':''}</span>`;}).join('');
+  return `<div class="usl"><div class="usl-h"><b>美股連動對照</b><small>對應關係為站內整理</small></div><div class="usl-b">${rows}</div>
+   ${names?`<div class="usl-n">對應美股個股：${names}　<small>無資料（沒有可穩定免費取得且條款允許的來源）</small></div>`:''}
+   <p class="rc-note">資料為期交所掛牌之美股指數期貨（${fuTime()}），成交清淡、與美股現貨指數有基差，是參考資料，不是美股收盤價；夜盤＝盤後交易時段。連動只是方向參考，不代表台股必然跟隨。</p></div>`;}
+const tile=(lab,val,sub,cl,src)=>`<div class="mkt"><small>${lab}</small><b class="${cl||''}">${val}</b><small>${sub||''}</small>${src?`<em>${src}</em>`:''}</div>`;
+const lastTwo=a=>a.length>=2?[a[a.length-1],a[a.length-2]]:[a[a.length-1],null];
+function mktPage(){
+  const box=$('#detail');if(!MK&&!FU&&!MC){box.innerHTML='<div class="empty">正在載入盤前資料…（若持續空白代表資料暫時無法取得）</div>';return;}
+  const tw=MK&&MK.twse.length?lastTwo(MK.twse):[null,null],tp=MK&&MK.tpex.length?lastTwo(MK.tpex):[null,null];
+  const bt=MK&&MK.breadth.twse&&Object.values(MK.breadth.twse).slice(-1)[0],bp=MK&&MK.breadth.tpex&&Object.values(MK.breadth.tpex).slice(-1)[0];
+  const ust=MC&&MC.ust,fx=MC&&MC.fx,la=a=>a&&a.length?a[a.length-1]:null,lb=a=>a&&a.length>1?a[a.length-2]:null;
+  const idxT=(lab,r,src)=>r[0]?tile(lab,fmt(r[0].close,2),`<span class="${ycls(r[0].chg)}">${sgn(r[0].chg,2)}（${zp(ppc(r[0].chg,r[0].close),2)}）</span>`,'',`${dfmt(r[0].d)} · ${src}`):tile(lab,'無資料','','', '');
+  const val=(r,k)=>r[0]?fmt(r[0][k]/1e8,0):'—';
+  const T=[idxT('加權指數',tw,'證交所'),idxT('櫃買指數',tp,'櫃買中心'),
+   tile('成交值（上市／上櫃）',tw[0]?`${val(tw,'val')}<em> 億</em>`:'無資料',tp[0]?`上櫃 ${val(tp,'val')} 億`:'',tw[1]&&tw[0]?'':'', tw[0]?`${dfmt(tw[0].d)} · 證交所／櫃買`:''),
+   tile('漲跌家數（股票）',bt?`<span class="up">${bt.stk.up[0]}</span> / <span class="down">${bt.stk.dn[0]}</span>`:'無資料',bt?`上櫃 <span class="up">${bp?bp.up[0]:'—'}</span> / <span class="down">${bp?bp.dn[0]:'—'}</span>`:'',bt?'':'',bt?`${dfmt(bt.d)} · 證交所／櫃買`:''),
+   tile('台指期 夜盤',FU&&fuS('TX','night')?`${fmt(fuS('TX','night').c,0)}`:'無資料',FU&&fuS('TX','night')?`<span class="${ycls(fuS('TX','night').pct)}">${sgn(fuS('TX','night').chg,0)}（${zp(fuS('TX','night').pct,2)}）</span>`:'','',FU&&fuS('TX','night')?`交易日 ${dfmt(fuS('TX','night').d)} · 期交所`:''),
+   tile('台指期 日盤',FU&&fuS('TX','day')?`${fmt(fuS('TX','day').c,0)}`:'無資料',FU&&fuS('TX','day')?`<span class="${ycls(fuS('TX','day').pct)}">${sgn(fuS('TX','day').chg,0)}（${zp(fuS('TX','day').pct,2)}）</span>`:'','',FU&&fuS('TX','day')?`${dfmt(fuS('TX','day').d)} · 期交所`:''),
+   tile('費半期貨 夜盤',FU&&fuS('SOF','night')?`<span class="${ycls(fuS('SOF','night').pct)}">${zp(fuS('SOF','night').pct,2)}</span>`:'無資料',FU&&fuS('SOF','night')?`那指100期 <span class="${ycls((fuS('UNF','night')||{}).pct)}">${fuS('UNF','night')?zp(fuS('UNF','night').pct,2):'無資料'}</span>`:'','',FU?`參考 · 期交所 ${dfmt(FU.date)}`:''),
+   tile('美元兌新台幣',fx?fmt(la(fx.ntd),3):'無資料',fx&&lb(fx.ntd)!=null?`<span class="${ycls(la(fx.ntd)-lb(fx.ntd))}">${sgn(la(fx.ntd)-lb(fx.ntd),3)}</span>（升＝台幣貶）`:'','',fx?`${dfmt(la(fx.days))} · 期交所參考匯率`:'')];
+  if(ust)T.push(tile('美債 10 年期殖利率',`${fmt(la(ust.y10),2)}<em>%</em>`,lb(ust.y10)!=null?`<span class="${ycls(la(ust.y10)-lb(ust.y10))}">${sgn((la(ust.y10)-lb(ust.y10))*100,0)} bp</span>　2年 ${fmt(la(ust.y2),2)}%`:'','',`${dfmt(la(ust.days))} · 美國財政部`));
+  else T.push(tile('美債 10 年期殖利率','無資料','','',''));
+  let h=`<div class="eyebrow">PRE-MARKET <span>官方資料為主 · 美股與國際為參考</span></div>${grp('盤前一眼重點','台股收盤、台指期、美股指數期貨、匯率與美債；每格標示資料日與來源')}
+  <div class="rcard"><div class="mkts">${T.join('')}</div><p class="rc-note">資料更新：${MK?`大盤 ${(MK.updated||'').replace('T',' ').slice(5,16)}`:''}${FU?`；期貨 ${(FU.updated||'').replace('T',' ').slice(5,16)}`:''}${MC?`；匯率與美債 ${(MC.updated||'').replace('T',' ').slice(5,16)}`:''}（台北時間）。任何一格取不到都顯示「無資料」，不補值。以下為各項明細。</p></div>`;
+  // 台股大盤
+  if(MK){const W=MK.twse,P=MK.tpex,d1=W.map(x=>x.d),d2=P.map(x=>x.d);
+   const rows=W.slice().reverse().slice(0,10).map(x=>{const p=P.find(y=>y.d===x.d);return `<tr><td>${dfmt(x.d)}</td><td class="num">${fmt(x.close,2)}</td><td class="num ${ycls(x.chg)}">${sgn(x.chg,2)}</td><td class="num">${fmt(x.val/1e8,0)}</td><td class="num">${fmt(x.vol/1e8,1)}</td><td class="num">${p?fmt(p.close,2):'—'}</td><td class="num">${p?fmt(p.val/1e8,0):'—'}</td></tr>`;}).join('');
+   const bk=(lab,b,mkt)=>{if(!b)return `<div class="brk"><b>${lab}</b><small>無資料</small></div>`;const up=b.up[0],dn=b.dn[0],fl=b.flat,t=up+dn+fl||1;
+     return `<div class="brk"><div class="brh"><b>${lab}</b><small>${dfmt(b.d)}</small></div><div class="brbar"><i class="u" style="width:${up/t*100}%"></i><i class="f" style="width:${fl/t*100}%"></i><i class="d" style="width:${dn/t*100}%"></i></div>
+      <div class="brn"><span class="up">上漲 ${fmt(up,0)}${b.up[1]?`（漲停 ${b.up[1]}）`:''}</span><span>持平 ${fmt(fl,0)}</span><span class="down">下跌 ${fmt(dn,0)}${b.dn[1]?`（跌停 ${b.dn[1]}）`:''}</span></div><small>未成交 ${fmt(b.none,0)}</small></div>`;};
+   const nb=Object.keys(MK.breadth.twse||{}).length;
+   h+=`${grp('台股大盤','加權與櫃買指數、成交量值、漲跌家數（證交所、櫃買中心官方資料）')}
+   <div class="rcard"><div class="rc-head"><h3>指數走勢 · 近 ${W.length} 個交易日</h3><span>${dfmt(MK.asof.twse)} · 證交所 FMTQIK／櫃買中心</span></div>
+   <div class="sparks"><div><h5>加權指數</h5>${spark(W.map(x=>x.close),d1,v=>fmt(v,0),'#4a63c9')}</div><div><h5>櫃買指數</h5>${spark(P.map(x=>x.close),d2,v=>fmt(v,2),'#8a6bc4')}</div>
+   <div><h5>上市成交值（億元）</h5>${spark(W.map(x=>x.val/1e8),d1,v=>fmt(v,0),'#c26a1c')}</div><div><h5>上櫃成交值（億元）</h5>${spark(P.map(x=>x.val/1e8),d2,v=>fmt(v,0),'#2c9a6f')}</div></div>
+   <details><summary>近 10 日逐日明細</summary><div class="tablewrap"><table class="ov mkov"><tr><th>日期</th><th>加權收盤</th><th>漲跌點</th><th>上市成交值（億）</th><th>成交量（億股）</th><th>櫃買指數</th><th>上櫃成交值（億）</th></tr>${rows}</table></div></details>
+   <p class="rc-note">${esc(MK.note)}</p></div>
+   <div class="rcard"><div class="rc-head"><h3>漲跌家數</h3><span>證交所「漲跌證券數合計」・櫃買中心上櫃股票市場現況</span></div><div class="brks">${bk('上市股票',bt&&{d:bt.d,up:bt.stk.up,dn:bt.stk.dn,flat:bt.stk.flat,none:bt.stk.none})}${bk('上櫃股票',bp)}</div>
+   ${bt?`<p class="rc-note">上市含權證等全證券的整體市場為 上漲 ${fmt(bt.mkt.up[0],0)}／下跌 ${fmt(bt.mkt.dn[0],0)}；此處以「股票」欄為準。漲跌家數官方只給當日，本站已累積 ${nb} 日，累積足夠後再顯示走勢。</p>`:''}</div>`;}
+  // 台指期
+  if(FU){const tx=FU.items.TX,hx=(FU.hist||{}).TX||[];
+   const ro=(lab,r)=>r?`<tr><td><b>${lab}</b></td><td>${dfmt(r.d)}</td><td class="num">${fmt(r.o,0)}</td><td class="num">${fmt(r.h,0)}</td><td class="num">${fmt(r.l,0)}</td><td class="num"><b>${fmt(r.c,0)}</b></td><td class="num ${ycls(r.chg)}">${sgn(r.chg,0)}（${zp(r.pct,2)}）</td><td class="num">${fmt(r.v,0)}</td><td class="num">${r.oi==null?'—':fmt(r.oi,0)}</td></tr>`:`<tr><td><b>${lab}</b></td><td colspan="8"><small>無資料</small></td></tr>`;
+   h+=`${grp('台指期夜盤與日盤','期交所臺股期貨近月契約；夜盤＝盤後交易時段、日盤＝一般交易時段')}
+   <div class="rcard"><div class="rc-head"><h3>臺股期貨 近月 ${tx?tx.m:''}</h3><span>${fuTime()}</span></div>
+   ${tx?`<div class="tablewrap"><table class="ov mkov"><tr><th>時段</th><th>交易日</th><th>開</th><th>高</th><th>低</th><th>收</th><th>漲跌（點／%）</th><th>成交量（口）</th><th>未平倉</th></tr>${ro('夜盤（盤後）',tx.night)}${ro('日盤（一般）',tx.day)}</table></div>
+   ${hx.length>=3?`<div class="sparks"><div><h5>日盤收盤走勢</h5>${spark(hx.map(r=>r[1]),hx.map(r=>r[0]),v=>fmt(v,0),'#4a63c9')}</div><div><h5>夜盤收盤走勢</h5>${spark(hx.map(r=>r[2]),hx.map(r=>r[0]),v=>fmt(v,0),'#c26a1c')}</div></div>`:`<p class="rc-note">走勢：累積中（官方只給最新交易日，本站已存 ${hx.length} 日，滿 3 日起顯示）。</p>`}`:'<p class="rc-note">無資料。</p>'}
+   <p class="rc-note">夜盤為前一日 15:00 至當日 05:00，屬同一交易日、在日盤之前；未平倉量夜盤不提供。來源：<a href="${FU.source}" target="_blank" rel="noreferrer">期交所 OpenAPI 期貨每日交易行情 ↗</a>。</p></div>`;
+   // 美股與國際
+   const ord=['UDF','SPF','UNF','SOF','TJF','GDF','BRF'];
+   const rw=c=>{const r=FU.items[c];if(!r)return `<tr><td><b>${FU.names[c]}</b></td><td colspan="5"><small>無資料</small></td></tr>`;return `<tr><td><b>${FU.names[c]}</b><small>近月 ${r.m}</small></td><td class="num">${r.night?fmt(r.night.c,r.night.c>1000?0:2):'—'}</td><td class="num">${fuTag(c,'night')}</td><td class="num">${r.day?fmt(r.day.c,r.day.c>1000?0:2):'—'}</td><td class="num">${fuTag(c,'day')}</td><td class="num"><small>${r.night?fmt(r.night.v,0):'—'} / ${r.day?fmt(r.day.v,0):'—'}</small></td></tr>`;};
+   const nd=(lab,why)=>`<tr class="nodata"><td colspan="6"><b>${lab}</b><small>無資料 — ${why}</small></td></tr>`;
+   h+=`${grp('美股與國際（參考資料）','期交所掛牌的美股指數期貨、東證、黃金與布蘭特原油期貨；個股與日韓指數無可用來源')}
+   <div class="rcard"><div class="rc-head"><h3>期交所掛牌的國際期貨</h3><span>${fuTime()}</span></div>
+   <div class="tablewrap"><table class="ov mkov mkintl"><tr><th>商品</th><th>夜盤收</th><th>夜盤漲跌</th><th>日盤收</th><th>日盤漲跌</th><th>量（夜／日）</th></tr>${ord.map(rw).join('')}
+   ${nd('台積電 ADR（TSM）、美股個股（MU、NVDA、AMD…）','沒有可穩定免費取得且條款允許的來源')}${nd('日經 225、韓國 KOSPI','同上（東證期貨為日本參考）')}</table></div>
+   <p class="rc-note">這些是期交所掛牌商品（反映美股盤勢），成交清淡、與現貨指數有基差，是<b>參考資料</b>，不是美股收盤指數。美股個股與日韓指數：Yahoo 禁止程式抓取、Stooq 需瀏覽器驗證，本站不繞過，因此顯示無資料。黃金／布蘭特期貨為期交所報價，單位依契約規格。來源：<a href="${FU.source}" target="_blank" rel="noreferrer">期交所 OpenAPI ↗</a>；${FU.note.split('。').slice(0,2).join('。')}。</p></div>`;}
+  // 匯率與美債
+  if(MC){const cb=MC.cbc;
+   h+=`${grp('匯率與利率','美元兌新台幣、日圓（期交所參考匯率）、韓元（央行）、美國公債殖利率（美國財政部）')}`;
+   if(fx)h+=`<div class="rcard"><div class="rc-head"><h3>匯率</h3><span>${dfmt(la(fx.days))} · 期交所每日外幣參考匯率</span></div><div class="m4 m3"><div><small>美元兌新台幣</small><b>${fmt(la(fx.ntd),3)}</b><small class="${ycls(la(fx.ntd)-lb(fx.ntd))}">較前日 ${sgn(la(fx.ntd)-lb(fx.ntd),3)}　${la(fx.ntd)>lb(fx.ntd)?'台幣貶':'台幣升'}</small></div><div><small>美元兌日圓</small><b>${fmt(la(fx.jpy),2)}</b><small class="${ycls(la(fx.jpy)-lb(fx.jpy))}">較前日 ${sgn(la(fx.jpy)-lb(fx.jpy),2)}</small></div><div><small>美元兌人民幣</small><b>${fmt(la(fx.cny),4)}</b><small class="${ycls(la(fx.cny)-lb(fx.cny))}">較前日 ${sgn(la(fx.cny)-lb(fx.cny),4)}</small></div></div>
+    <div class="sparks"><div><h5>美元兌新台幣（近 ${fx.days.length} 日）</h5>${spark(fx.ntd,fx.days,v=>fmt(v,3),'#4a63c9')}</div><div><h5>美元兌日圓</h5>${spark(fx.jpy,fx.days,v=>fmt(v,2),'#c26a1c')}</div></div>
+    ${cb?`<p class="rc-note">中央銀行 BP01D01（日資料，台灣 16:00 銀行間即期）：資料至 ${dfmt(cb.d)}（央行檔案更新較慢，最後更新 ${cb.updated||'—'}）新台幣 ${fmt(cb.ntd,3)}、韓元 ${fmt(cb.krw,1)} 兌 1 美元；央行較新資料尚未提供，本站以期交所參考匯率顯示最新值。<a href="${cb.source.split('（')[0]}" target="_blank" rel="noreferrer">央行 ↗</a></p>`:'<p class="rc-note">中央銀行匯率資料這次取不到（無資料）。</p>'}
+    <p class="rc-note">來源：<a href="${fx.source.split('（')[0]}" target="_blank" rel="noreferrer">期交所 DailyForeignExchangeRates ↗</a>。官方參考匯率，非即時報價。</p></div>`;
+   if(ust)h+=`<div class="rcard"><div class="rc-head"><h3>美國公債殖利率</h3><span>${dfmt(la(ust.days))} · 美國財政部 Par Yield Curve</span></div><div class="m4"><div><small>3 個月</small><b>${fmt(la(ust.y3m),2)}%</b></div><div><small>2 年</small><b>${fmt(la(ust.y2),2)}%</b><small class="${ycls(la(ust.y2)-lb(ust.y2))}">${sgn((la(ust.y2)-lb(ust.y2))*100,0)} bp</small></div><div><small>10 年</small><b>${fmt(la(ust.y10),2)}%</b><small class="${ycls(la(ust.y10)-lb(ust.y10))}">${sgn((la(ust.y10)-lb(ust.y10))*100,0)} bp</small></div><div><small>30 年</small><b>${fmt(la(ust.y30),2)}%</b><small class="${ycls(la(ust.y30)-lb(ust.y30))}">${sgn((la(ust.y30)-lb(ust.y30))*100,0)} bp</small></div></div>
+    <div class="sparks"><div><h5>10 年期（近 ${ust.days.length} 日）</h5>${spark(ust.y10,ust.days,v=>fmt(v,2)+'%','#4a63c9')}</div><div><h5>10 年減 2 年利差（%）</h5>${spark(ust.y10.map((v,i)=>v==null||ust.y2[i]==null?null:v-ust.y2[i]),ust.days,v=>fmt(v,2),'#8a6bc4')}</div></div>
+    <p class="rc-note">10 年減 2 年利差目前 ${fmt(la(ust.y10)-la(ust.y2),2)} 個百分點。bp＝0.01 個百分點。來源：<a href="${ust.source.split('（')[0]}" target="_blank" rel="noreferrer">美國財政部 ↗</a>（官方公布值，每個美國營業日更新）。</p></div>`;
+   else h+=`<div class="rcard"><div class="rc-head"><h3>美國公債殖利率</h3><span>無資料</span></div><p class="rc-note">美國財政部資料這次取不到。</p></div>`;}
+  // 事件行事曆
+  if(MCAL){const today=new Date(Date.now()+8*3600e3).toISOString().slice(0,10),lim=new Date(Date.now()+8*3600e3+60*864e5).toISOString().slice(0,10);
+   const E=MCAL.events.filter(e=>(e.d2||e.d)>=today&&e.d<=lim).map(e=>({...e,kk:e.k}));
+   if(CAL)Object.entries(CAL.closed).filter(([d])=>d>=today&&d<=lim&&new Date(d+'T00:00:00Z').getUTCDay()%6!==0).forEach(([d,n])=>E.push({d,k:'休市',t:`台股休市：${n}`,tw:'',s:CAL.source}));
+   E.sort((a,b)=>a.d.localeCompare(b.d));
+   const li=e=>`<li><b>${dfmt(e.d)}${e.d2?'–'+dmd(e.d2):''}</b> <span class="tag">${e.k}</span> ${esc(e.t)}${e.tw?` <small>${esc(e.tw)}</small>`:''} <a href="${e.s}" target="_blank" rel="noreferrer">來源 ↗</a></li>`;
+   h+=`${grp('重要事件行事曆','未來 60 天：美國 Fed／CPI／非農、台灣央行、台指期結算、台股休市')}
+   <div class="rcard"><div class="rc-head"><h3>近期重要日程</h3><span>人工維護 · 更新 ${dfmt(MCAL.updated)} · 附官方來源</span></div>${E.length?`<ul class="gapl evl">${E.slice(0,8).map(li).join('')}</ul>${E.length>8?`<details><summary>更多日程（${E.length-8} 筆）</summary><ul class="gapl evl">${E.slice(8).map(li).join('')}</ul></details>`:''}`:'<p class="rc-note">未來 60 天沒有已登錄的事件（本表為人工維護，可能尚未更新）。</p>'}
+   <p class="rc-note">${esc(MCAL.note)} 個股的除權息、法說會、財報期限見「日程日曆」。</p></div>`;}
+  box.innerHTML=h;
 }

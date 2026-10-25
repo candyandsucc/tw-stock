@@ -23,6 +23,12 @@ T = [
  ("fin", "金控與銀行", "金融控股、銀行與壽險", "2881 2882 2883 2884 2885 2886 2887 2890 2891 2892 5880 2880 2812 2801 2834"),
  ("bio", "生技醫療", "新藥、醫材與 CDMO", "6446 4743 1795 6547 4162 3705 6472 6589 4128 1760"),
 ]
+# 美股連動對照（站內整理）：us＝對應的期交所美股指數期貨代號（有資料可顯示漲跌）；usn＝對應美股個股（僅列名稱，本站沒有合規免費來源，顯示無資料）
+US = {
+ "memory": (["SOF"], "MU（美光）、WDC、SNDK"), "foundry": (["SOF"], "TSM ADR、INTC"), "semiequip": (["SOF"], "AMAT、LRCX、KLAC"),
+ "ic": (["SOF", "UNF"], "NVDA、AMD、AVGO、QCOM"), "aiserver": (["UNF", "SOF"], "NVDA、AMD、SMCI、DELL"), "cooling": (["UNF"], "VRT、NVDA"),
+ "cpo": (["UNF", "SOF"], "NVDA、AVGO、COHR、LITE"), "pcb": (["UNF"], "NVDA、TTMI"), "substrate": (["SOF"], "NVDA、AMD、INTC"), "network": (["UNF"], "CSCO、ANET、QCOM"),
+}
 st = {s["code"]: s for s in json.loads((R / "stocks.json").read_text())["stocks"]}
 out = []; drop = []
 for id_, name, desc, codes in T:
@@ -31,9 +37,10 @@ for id_, name, desc, codes in T:
         if c in cs: continue
         if c in st: cs.append(c)
         else: drop.append((name, c))
-    out.append(dict(id=id_, name=name, desc=desc, codes=cs))
+    u = US.get(id_)
+    out.append(dict(id=id_, name=name, desc=desc, codes=cs, **({'us': u[0], 'usn': u[1]} if u else {})))
 (R / "themes.json").write_text(json.dumps(dict(
     themes=out, note="題材與族群為本站人工整理的歸類（一檔可屬多個題材），不是證交所／櫃買官方產業分類，也不構成推薦；個股的價量、法人、營收、財報仍為官方資料。",
-    updated="2026-10-24"), ensure_ascii=False, separators=(",", ":")))
+    updated="2026-10-25"), ensure_ascii=False, separators=(",", ":")))
 for t in out: print(t["name"], len(t["codes"]), " ".join(f"{c}{st[c]['name']}" for c in t["codes"]))
 print("DROPPED", drop)
