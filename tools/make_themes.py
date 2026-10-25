@@ -25,7 +25,7 @@ T = [
 ]
 # 美股連動對照（站內整理）：us＝對應的期交所美股指數期貨代號（有資料可顯示漲跌）；usn＝對應美股個股（僅列名稱，本站沒有合規免費來源，顯示無資料）
 US = {
- "memory": (["SOF"], "MU（美光）、WDC、SNDK"), "foundry": (["SOF"], "TSM ADR、INTC"), "semiequip": (["SOF"], "AMAT、LRCX、KLAC"),
+ "memory": (["SOF"], "MU（美光）、WDC、SNDK"), "foundry": (["SOF"], "TSM（台積電 ADR）、INTC"), "semiequip": (["SOF"], "AMAT、LRCX、KLAC"),
  "ic": (["SOF", "UNF"], "NVDA、AMD、AVGO、QCOM"), "aiserver": (["UNF", "SOF"], "NVDA、AMD、SMCI、DELL"), "cooling": (["UNF"], "VRT、NVDA"),
  "cpo": (["UNF", "SOF"], "NVDA、AVGO、COHR、LITE"), "pcb": (["UNF"], "NVDA、TTMI"), "substrate": (["SOF"], "NVDA、AMD、INTC"), "network": (["UNF"], "CSCO、ANET、QCOM"),
 }
@@ -38,7 +38,7 @@ for id_, name, desc, codes in T:
         if c in st: cs.append(c)
         else: drop.append((name, c))
     u = US.get(id_)
-    out.append(dict(id=id_, name=name, desc=desc, codes=cs, **({'us': u[0], 'usn': u[1]} if u else {})))
+    out.append(dict(id=id_, name=name, desc=desc, codes=cs, **({'usn': u[1]} if u else {})))
 (R / "themes.json").write_text(json.dumps(dict(
     themes=out, note="題材與族群為本站人工整理的歸類（一檔可屬多個題材），不是證交所／櫃買官方產業分類，也不構成推薦；個股的價量、法人、營收、財報仍為官方資料。",
     updated="2026-10-25"), ensure_ascii=False, separators=(",", ":")))

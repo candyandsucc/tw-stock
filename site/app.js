@@ -950,14 +950,10 @@ const ycls=v=>v>0?'up':v<0?'down':'flat';
 const fuS=(c,k)=>FU&&FU.items&&FU.items[c]&&FU.items[c][k];
 const fuTag=(c,k)=>{const r=fuS(c,k);return r?`<b class="${ycls(r.pct)}">${zp(r.pct,2)}</b>`:'<small>無資料</small>';};
 const fuTime=()=>FU?`期交所交易日 ${dfmt(FU.date)}，本站抓取 ${(FU.updated||'').replace('T',' ').slice(5,16)}（台北）`:'';
-function usBlock(ths,inStock){
-  const codes=[...new Set(ths.flatMap(t=>t.us||[]))];if(!codes.length)return '';
-  const names=[...new Set(ths.filter(t=>t.usn).map(t=>t.usn))].join('；');
-  if(!FU)return `<p class="rc-note usl"><b>美股連動（站內整理）：</b>期交所期貨資料載入失敗，無資料。</p>`;
-  const rows=codes.map(c=>{const n=fuS(c,'night'),d=fuS(c,'day');return `<span class="usi"><b>${FU.names[c].replace('美國','').replace('期貨','')}期貨</b> 夜盤 ${fuTag(c,'night')}${n?' <small>'+dmd(n.d)+'</small>':''}・日盤 ${fuTag(c,'day')}${d?' <small>'+dmd(d.d)+'</small>':''}</span>`;}).join('');
-  return `<div class="usl"><div class="usl-h"><b>美股連動對照</b><small>對應關係為站內整理</small></div><div class="usl-b">${rows}</div>
-   ${names?`<div class="usl-n">對應美股個股：${names}　<small>無資料（沒有可穩定免費取得且條款允許的來源）</small></div>`:''}
-   <p class="rc-note">資料為期交所掛牌之美股指數期貨（${fuTime()}），成交清淡、與美股現貨指數有基差，是參考資料，不是美股收盤價；夜盤＝盤後交易時段。連動只是方向參考，不代表台股必然跟隨。</p></div>`;}
+function usBlock(ths,inStock){   // 美股連動對照：只列「對應哪幾檔美股」（站內整理），不顯示任何美股個股報價或漲跌
+  const L=ths.filter(t=>t.usn);if(!L.length)return '';
+  return `<div class="usl"><div class="usl-h"><b>美股連動對照</b><small>對應關係為站內整理</small></div><div class="usl-b">${L.map(t=>`<span class="usi"><b>${esc(t.name)}</b> → ${esc(t.usn)}</span>`).join('')}</div>
+   <p class="rc-note">僅列出對應的美股標的，供盤前對照用；不含美股個股報價，連動只是方向參考，不代表台股必然跟隨。美股指數期貨參考見「盤前總覽」。</p></div>`;}
 const tile=(lab,val,sub,cl,src)=>`<div class="mkt"><small>${lab}</small><b class="${cl||''}">${val}</b><small>${sub||''}</small>${src?`<em>${src}</em>`:''}</div>`;
 const lastTwo=a=>a.length>=2?[a[a.length-1],a[a.length-2]]:[a[a.length-1],null];
 function mktPage(){
@@ -1005,11 +1001,11 @@ function mktPage(){
    const ord=['UDF','SPF','UNF','SOF','TJF','GDF','BRF'];
    const rw=c=>{const r=FU.items[c];if(!r)return `<tr><td><b>${FU.names[c]}</b></td><td colspan="5"><small>無資料</small></td></tr>`;return `<tr><td><b>${FU.names[c]}</b><small>近月 ${r.m}</small></td><td class="num">${r.night?fmt(r.night.c,r.night.c>1000?0:2):'—'}</td><td class="num">${fuTag(c,'night')}</td><td class="num">${r.day?fmt(r.day.c,r.day.c>1000?0:2):'—'}</td><td class="num">${fuTag(c,'day')}</td><td class="num"><small>${r.night?fmt(r.night.v,0):'—'} / ${r.day?fmt(r.day.v,0):'—'}</small></td></tr>`;};
    const nd=(lab,why)=>`<tr class="nodata"><td colspan="6"><b>${lab}</b><small>無資料 — ${why}</small></td></tr>`;
-   h+=`${grp('美股與國際（參考資料）','期交所掛牌的美股指數期貨、東證、黃金與布蘭特原油期貨；個股與日韓指數無可用來源')}
+   h+=`${grp('美股與國際（參考資料）','期交所掛牌的美股指數期貨、東證、黃金與布蘭特原油期貨；日韓指數無可用來源')}
    <div class="rcard"><div class="rc-head"><h3>期交所掛牌的國際期貨</h3><span>${fuTime()}</span></div>
    <div class="tablewrap"><table class="ov mkov mkintl"><tr><th>商品</th><th>夜盤收</th><th>夜盤漲跌</th><th>日盤收</th><th>日盤漲跌</th><th>量（夜／日）</th></tr>${ord.map(rw).join('')}
-   ${nd('台積電 ADR（TSM）、美股個股（MU、NVDA、AMD…）','沒有可穩定免費取得且條款允許的來源')}${nd('日經 225、韓國 KOSPI','同上（東證期貨為日本參考）')}</table></div>
-   <p class="rc-note">這些是期交所掛牌商品（反映美股盤勢），成交清淡、與現貨指數有基差，是<b>參考資料</b>，不是美股收盤指數。美股個股與日韓指數：Yahoo 禁止程式抓取、Stooq 需瀏覽器驗證，本站不繞過，因此顯示無資料。黃金／布蘭特期貨為期交所報價，單位依契約規格。來源：<a href="${FU.source}" target="_blank" rel="noreferrer">期交所 OpenAPI ↗</a>；${FU.note.split('。').slice(0,2).join('。')}。</p></div>`;}
+   ${nd('日經 225、韓國 KOSPI','同上（東證期貨為日本參考）')}</table></div>
+   <p class="rc-note">這些是期交所掛牌商品（反映美股盤勢），成交清淡、與現貨指數有基差，是<b>參考資料</b>，不是美股收盤指數。日經 225、韓國 KOSPI：Yahoo 禁止程式抓取、Stooq 需瀏覽器驗證，本站不繞過，因此顯示無資料；美股個股不顯示報價。黃金／布蘭特期貨為期交所報價，單位依契約規格。來源：<a href="${FU.source}" target="_blank" rel="noreferrer">期交所 OpenAPI ↗</a>；${FU.note.split('。').slice(0,2).join('。')}。</p></div>`;}
   // 匯率與美債
   if(MC){const cb=MC.cbc;
    h+=`${grp('匯率與利率','美元兌新台幣、日圓（期交所參考匯率）、韓元（央行）、美國公債殖利率（美國財政部）')}`;
