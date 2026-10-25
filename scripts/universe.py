@@ -4,7 +4,7 @@
 import json, re, pathlib, datetime as dt
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SNAP = ROOT / "snapshots"; HIS = ROOT / "site" / "data" / "history"
-TOP = 400; DAYS = 130; MIN_ROWS = 60
+TOP = 400; DAYS = 300; MIN_ROWS = 60   # DAYS：每檔保留的交易日數（52 週高低與 MA200 需 ≥ 260）
 
 def load_snaps(days=DAYS):
     ds = sorted({f.name[:10] for f in SNAP.glob("????-??-??_*.json")})[-days:]

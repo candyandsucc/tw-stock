@@ -260,13 +260,13 @@ function dayStat(rows,j){
   const r=rows[j],c=r[4],pc=j>0?rows[j-1][4]:null;
   const avg=(k,f)=>j+1>=k&&j+1-k>=GS?rows.slice(j+1-k,j+1).reduce((a,x)=>a+f(x),0)/k:null;
   const v20=avg(20,x=>x[5]||0);
-  return {j,last:j===rows.length-1,date:r[0],o:r[1],h:r[2],l:r[3],c,chg:pc==null?null:c-pc,pct:pc?(c-pc)/pc*100:null,vol:r[5],vr:v20?r[5]/v20:null,ma5:avg(5,x=>x[4]),ma20:avg(20,x=>x[4]),ma60:avg(60,x=>x[4])};
+  return {j,last:j===rows.length-1,date:r[0],o:r[1],h:r[2],l:r[3],c,chg:pc==null?null:c-pc,pct:pc?(c-pc)/pc*100:null,vol:r[5],vr:v20?r[5]/v20:null,ma5:avg(5,x=>x[4]),ma20:avg(20,x=>x[4]),ma60:avg(60,x=>x[4]),ma200:avg(200,x=>x[4])};
 }
 const CW=760,CH0=260,CVH=60,CP=36;
 function chart(rows,n){
   const R=rows.slice(-n),w=CW,h=CH0,vh=CVH,p=CP,off=rows.length-R.length;const cl=rows.map(r=>r[4]);
   const ma=k=>R.map((_,i)=>{const j=off+i;return j+1>=k&&j+1-k>=GS?cl.slice(j+1-k,j+1).reduce((a,b)=>a+b)/k:null;});
-  const lines=[['#4871db',R.map(r=>r[4])],['#f0a020',ma(5)],['#d4483b',ma(20)],['#2c9a6f',ma(60)]];
+  const lines=[['#4871db',R.map(r=>r[4])],['#f0a020',ma(5)],['#d4483b',ma(20)],['#2c9a6f',ma(60)],['#8a6bc4',ma(200)]];
   const vals=lines.flatMap(l=>l[1]).filter(v=>v!=null);const mn=Math.min(...vals),mx=Math.max(...vals);
   const X=i=>p+i*(w-p*2)/(R.length-1||1),Y=v=>10+(h-20)*(1-(v-mn)/(mx-mn||1));const vm=Math.max(...R.map(r=>r[5]||0));
   const path=a=>a.map((v,i)=>v==null?'':`${a.slice(0,i).some(x=>x!=null)?'L':'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join('');
@@ -276,7 +276,7 @@ function chart(rows,n){
   const sv={w,h,vh,p,off,n:R.length};
   return {sv,X,Y,svg:`<svg id="ctsvg" viewBox="0 0 ${w} ${h+vh+20}" width="100%" tabindex="0" role="img" aria-label="價格走勢圖，可用滑鼠、點選、左右滑動或左右方向鍵查看每日數據">${grid}<path d="${path(R.map(r=>r[4]))}L${X(R.length-1)},${h}L${X(0)},${h}Z" fill="#edf2ff" opacity=".6"/>${lines.map(([c,a],k)=>`<path d="${path(a)}" fill="none" stroke="${c}" stroke-width="${k?1.2:2}" ${k?'stroke-dasharray="4 2"':''}/>`).join('')}${bars}
   <text x="${p}" y="${h+vh+16}" font-size="10" fill="#98a2b3">${dfmt(R[0][0])}</text><text x="${w-p}" y="${h+vh+16}" font-size="10" fill="#98a2b3" text-anchor="end">${dfmt(R.at(-1)[0])}</text>
-  <g id="ctcur" style="display:none;pointer-events:none"><line id="ctl" y1="4" y2="${h+vh}" stroke="#5f6f8c" stroke-width="1" stroke-dasharray="3 2"/><circle id="ctd5" r="3" fill="#f0a020" stroke="#fff" stroke-width="1"/><circle id="ctd20" r="3" fill="#d4483b" stroke="#fff" stroke-width="1"/><circle id="ctd60" r="3" fill="#2c9a6f" stroke="#fff" stroke-width="1"/><circle id="ctdc" r="5" stroke="#fff" stroke-width="2"/></g></svg>`};
+  <g id="ctcur" style="display:none;pointer-events:none"><line id="ctl" y1="4" y2="${h+vh}" stroke="#5f6f8c" stroke-width="1" stroke-dasharray="3 2"/><circle id="ctd5" r="3" fill="#f0a020" stroke="#fff" stroke-width="1"/><circle id="ctd20" r="3" fill="#d4483b" stroke="#fff" stroke-width="1"/><circle id="ctd60" r="3" fill="#2c9a6f" stroke="#fff" stroke-width="1"/><circle id="ctd200" r="3" fill="#8a6bc4" stroke="#fff" stroke-width="1"/><circle id="ctdc" r="5" stroke="#fff" stroke-width="2"/></g></svg>`};
 }
 function chartNotes(H){   // 走勢圖卡片底部的小字備註：有除權還原／價格異常／資料不足時才出現，沒有內容回傳空字串
   const g=H.gaps,adj=H.adjusted||[],n=H.rows.length,ev=g?g.ev:[],sus=ev.filter(e=>e.kind!=='ex'),exs=ev.filter(e=>e.kind==='ex'),N=[];
@@ -285,13 +285,14 @@ function chartNotes(H){   // 走勢圖卡片底部的小字備註：有除權還
   if(exs.length)N.push(`<div class="cnote">ℹ ${exs.map(e=>`<b>${dfmt(e.d)}</b> 單日 ${fmt(e.pct,1)}%`).join('、')}：為官方除權息日（參考價 ${exs.map(e=>fmt(e.ref)).join('、')}），已含除息缺口，不視為異常；價格未做還原（還原僅限參考價／前收 ≤ 0.9 的重大除權）。</div>`);
   if(g&&g.suspect){const m=H.ma60;N.push(`<div class="cnote${m==null?' bad':''}"><b>均線與 60 日高：</b>疑似事件日 ${dfmt(g.since)} 起共 ${g.nAfter} 日資料，MA5／MA20／MA60 與 60 日高只用事件日（含）之後的價格計算，不跨越跳空。${m==null?`MA60 需 60 日，事件後僅 ${g.nAfter} 日 → <b>資料不足，已隱藏 MA60</b>。`:`MA60（事件後 60 日）＝${fmt(m)}。`} 60 日高（事件後）＝${fmt(g.hi60)}${g.hi60raw!==g.hi60?`；不排除事件前資料則為 ${fmt(g.hi60raw)}（含未還原價格，不採用）`:''}。支撐與壓力價位帶仍由完整歷史推算、可能跨越事件日，僅供參考。</div>`);}
   else if(n<60)N.push(`<div class="cnote"><b>資料不足：</b>目前僅 ${n} 個交易日的歷史資料，MA60 需至少 60 日，<b>已隱藏 MA60</b>${n<20?'（MA20 亦不足）':''}；新上市或剛納入歷史涵蓋的標的會隨每日累積自動補齊。</div>`);
+  if(H.ma200==null){const nn=g&&g.suspect?g.nAfter:n;N.push(`<div class="cnote"><b>MA200（年線）資料不足：</b>${g&&g.suspect?`疑似事件日後僅 ${nn} 日`:`目前僅 ${nn} 個交易日`}，MA200 需至少 200 日，<b>已隱藏 MA200</b>；不足的標的不補值，會隨每日累積自動出現。</div>`);}
   if(!N.length)return '';
   return `<div class="cnotes">${N.join('')}${sus.length||exs.length?'<div class="cnote-s">偵測規則：相鄰兩日收盤變動超過 11%（漲跌幅限制為 ±10%），與證交所 TWT49U／櫃買 exDailyQ 的除權息計算結果比對；標示「疑似」不代表確定，也不是買賣建議。</div>':''}</div>`;}
 function chartTop(H){
   const rows=H.rows;GS=H.gaps&&H.gaps.suspect?Math.max(0,rows.findIndex(r=>r[0]===H.gaps.since)):0;if(CT.code!==H.code)CT={code:H.code,n:Math.min(60,rows.length),sel:null};
   CT.n=Math.min(CT.n,rows.length);if(CT.sel!=null&&CT.sel<rows.length-CT.n)CT.sel=null;
   const c=chart(rows,CT.n);window._CC={c,rows};
-  const rb=rows.length>60?`<span class="rng"><button data-n="60" class="${CT.n===60?'on':''}">近 60 日</button><button data-n="${rows.length}" class="${CT.n===rows.length?'on':''}">全部 ${rows.length} 日</button></span>`:'';
+  const rb=rows.length>60?`<span class="rng">${[60,120,250].filter(k=>rows.length>k+10).map(k=>`<button data-n="${k}" class="${CT.n===k?'on':''}">${k===250?'近 1 年':'近 '+k+' 日'}</button>`).join('')}<button data-n="${rows.length}" class="${CT.n===rows.length?'on':''}">全部 ${rows.length} 日</button></span>`:'';
   return `<div class="charttitle"><b>價格走勢<small>近 ${CT.n} 個交易日（共 ${rows.length} 日）</small></b><span class="rngwrap">${rb}<span>日線收盤 · 均線 · 成交量</span></span></div>
   <div class="chartbox" id="chartbox">${c.svg}<div class="cttip" id="cttip" style="display:none"></div></div>
   <div class="ctnote">電腦：滑鼠移到圖上看每日數據、點一下固定；手機：點選或左右滑動；鍵盤可用左右鍵。</div>
@@ -299,13 +300,13 @@ function chartTop(H){
 }
 function maRow(st,pinned){
   const head=pinned?`<b>${dfmt(st.date)}</b> <button class="ctback" id="ctback">回到最新</button>`:st.last?'最新':`${dfmt(st.date)}（預覽）`;
-  return `<span class="mad">${head}</span><span><i style="background:#f0a020"></i>MA5 <b>${fmt(st.ma5)}</b></span><span><i style="background:#d4483b"></i>MA20 <b>${fmt(st.ma20)}</b></span><span><i style="background:#2c9a6f"></i>MA60 <b>${st.ma60==null?'資料不足':fmt(st.ma60)}</b></span><span>量比 <b>${st.vr==null?'—':fmt(st.vr)+' 倍'}</b></span>`;
+  return `<span class="mad">${head}</span><span><i style="background:#f0a020"></i>MA5 <b>${fmt(st.ma5)}</b></span><span><i style="background:#d4483b"></i>MA20 <b>${fmt(st.ma20)}</b></span><span><i style="background:#2c9a6f"></i>MA60 <b>${st.ma60==null?'資料不足':fmt(st.ma60)}</b></span><span><i style="background:#8a6bc4"></i>MA200 <b>${st.ma200==null?'資料不足':fmt(st.ma200)}</b></span><span>量比 <b>${st.vr==null?'—':fmt(st.vr)+' 倍'}</b></span>`;
 }
 function tipHtml(st){
   const k=cls(st.chg),ch=st.chg==null?'—':`${sg(st.chg)}${fmt(st.chg)}（${sg(st.pct)}${fmt(st.pct)}%）`;
   return `<div class="tt-d">${dfmt(st.date)}${st.last?' · 最新':''}</div><div class="tt-g"><span>開</span><b>${fmt(st.o)}</b><span>高</span><b>${fmt(st.h)}</b><span>低</span><b>${fmt(st.l)}</b><span>收</span><b class="${k}">${fmt(st.c)}</b></div>
   <div class="tt-r"><span>漲跌</span><b class="${k}">${ch}</b></div><div class="tt-r"><span>成交量</span><b>${fmt(st.vol/1000,0)} 張</b></div><div class="tt-r"><span>量比</span><b>${st.vr==null?'—':fmt(st.vr)+' 倍'}</b></div>
-  <div class="tt-r"><span class="m5">MA5</span><b>${fmt(st.ma5)}</b></div><div class="tt-r"><span class="m20">MA20</span><b>${fmt(st.ma20)}</b></div><div class="tt-r"><span class="m60">MA60</span><b>${st.ma60==null?'資料不足':fmt(st.ma60)}</b></div>`;
+  <div class="tt-r"><span class="m5">MA5</span><b>${fmt(st.ma5)}</b></div><div class="tt-r"><span class="m20">MA20</span><b>${fmt(st.ma20)}</b></div><div class="tt-r"><span class="m60">MA60</span><b>${st.ma60==null?'資料不足':fmt(st.ma60)}</b></div><div class="tt-r"><span class="m200">MA200</span><b>${st.ma200==null?'資料不足':fmt(st.ma200)}</b></div>`;
 }
 function bindChart(){
   const top=$('#ctop'),svg=$('#ctsvg');if(!top||!svg||!window._CC)return;
@@ -317,7 +318,7 @@ function bindChart(){
     i=Math.max(0,Math.min(sv.n-1,i));const st=dayStat(rows,sv.off+i),x=c.X(i);
     cur.style.display='';$('#ctl').setAttribute('x1',x);$('#ctl').setAttribute('x2',x);
     const dot=(id,v)=>{const e=$(id);if(v==null)e.style.display='none';else{e.style.display='';e.setAttribute('cx',x);e.setAttribute('cy',c.Y(v));}};
-    dot('#ctd5',st.ma5);dot('#ctd20',st.ma20);dot('#ctd60',st.ma60);dot('#ctdc',st.c);
+    dot('#ctd5',st.ma5);dot('#ctd20',st.ma20);dot('#ctd60',st.ma60);dot('#ctd200',st.ma200);dot('#ctdc',st.c);
     $('#ctdc').setAttribute('fill',st.chg>0?'#e0392d':st.chg<0?'#1a9a5a':'#6b778c');
     tip.innerHTML=tipHtml(st);tip.style.display='block';
     const bw=box.clientWidth,tw=tip.offsetWidth,px=x/sv.w*bw;let left=px+12;if(left+tw>bw-4)left=px-tw-12;tip.style.left=Math.max(2,left)+'px';
@@ -395,7 +396,7 @@ async function pick(code){
   if(H){html+=`<div class="chartpanel"><div id="ctop">${chartTop(H)}</div>
   ${chartNotes(H)}<div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
   ${grp('價位怎麼看','支撐、壓力與位階在哪（觀察價位，非買賣建議）· 依 '+dfmt(H.date)+' 收盤')}`;
-  if(L){const cf=confluence(H,L);html+=posTrack(s,L)+lvcards(L,cf,close,H)+`<div id="rrbox">${L.support&&L.support.length?rrHtml(H,L,close):''}</div>`+`<p class="note2 disclaimer">支撐與壓力為本站依歷史價格結構自行計算的觀察價位，可能與其他網站不同，不是目標價或買賣建議。</p>`+(L.limits?`<p class="note2">漲跌停參考（依漲跌幅限制，非結構價位）：明日漲停 ${fmt(L.limits.up)} · 跌停 ${fmt(L.limits.down)}</p>`:'');}
+  if(L){const cf=confluence(H,L);html+=posTrack(s,L)+w52Card(s,H)+lvcards(L,cf,close,H)+`<div id="rrbox">${L.support&&L.support.length?rrHtml(H,L,close):''}</div>`+`<p class="note2 disclaimer">支撐與壓力為本站依歷史價格結構自行計算的觀察價位，可能與其他網站不同，不是目標價或買賣建議。</p>`+(L.limits?`<p class="note2">漲跌停參考（依漲跌幅限制，非結構價位）：明日漲停 ${fmt(L.limits.up)} · 跌停 ${fmt(L.limits.down)}</p>`:'');}
   const P=H.patterns;if(P&&(P.trend||P.box)){const t=P.trend,b=P.box;html+=`<div class="rcard patt"><div class="rc-head"><h3>形態偵測<small>（觀察用）</small></h3><span>依 ${dfmt(H.date)} 收盤</span></div>
    ${t?`<div class="sector-line"><span>📈 上升趨勢線（近期低點墊高）</span><b class="${t.state==='守住'?'up':'down'}">${t.state}</b><strong>線約 ${fmt(t.lineToday)}</strong></div><p class="rc-note">近 ${t.sinceDays} 日內最近 3 個波段低點 ${t.points.map(p=>dfmt(p[0]).slice(5)+' '+fmt(p[1])).join(' → ')}，趨勢線每日約 ${t.slopePct>0?'+':''}${fmt(t.slopePct)}%；收盤距趨勢線 ${t.dist>0?'+':''}${fmt(t.dist,1)}%。</p>`:''}
    ${b?`<div class="sector-line"><span>▭ 整理平台（前 ${b.days} 日區間窄）</span><b>${b.state}</b><strong>${fmt(b.low)}–${fmt(b.high)}</strong></div><p class="rc-note">不含今日的前 ${b.days} 個交易日最高 ${fmt(b.high)}、最低 ${fmt(b.low)}，區間寬度 ${fmt(b.width,1)}%。</p>`:''}
@@ -413,6 +414,15 @@ const IND={"01":"水泥工業","02":"食品工業","03":"塑膠工業","04":"紡
 function vr20(rows){const v=rows.map(r=>r[5]||0);if(v.length<20)return '—';const a=v.slice(-20).reduce((x,y)=>x+y)/20;return a?fmt(v.at(-1)/a)+' 倍':'—';}
 const z=v=>v==null?'—':(v>0?'+':'')+fmt(v,1);
 const grp=(t,sub)=>`<div class="sectionlabel"><h3>${t}</h3><span>${sub}</span></div>`;
+function w52Card(s,H){   // 52 週高低與位置（官方日線歷史；疑似未還原事件前的資料不納入）
+  const w=H&&H.w52;if(!w)return '';const close=s.close,g=H.gaps&&H.gaps.suspect;
+  const tr=w.pos==null?'':`<div class="track w52"><i style="left:${Math.max(0,Math.min(100,w.pos))}%"></i></div>`;
+  const ttl=w.ok?'52 週高低點與位置':'52 週高低點與位置',ws=new Date(Date.parse(H.date+'T00:00:00Z')-364*864e5).toISOString().slice(0,10),m200=dayStat(H.rows,H.rows.length-1).ma200;
+  if(!w.ok)return `<div class="rcard w52c"><div class="rc-head"><h3>${ttl}</h3><span>歷史不足</span></div><p class="rc-note" style="margin:0"><b>歷史不足：</b>${g?`疑似未還原事件日 ${dfmt(w.since)} 起`:`資料自 ${dfmt(w.first)} 起`}僅 ${w.n} 個交易日，未滿 52 週（約 245 個交易日），<b>不提供 52 週高低與位置</b>，也不以推算補值。僅供參考的區間：${dfmt(w.first)} 以來最高 ${fmt(w.hi)}（${dfmt(w.hiD)}）、最低 ${fmt(w.lo)}（${dfmt(w.loD)}）。資料隨每日累積自動補齊。</p></div>`;
+  return `<div class="rcard w52c"><div class="rc-head"><h3>${ttl}</h3><span>${dfmt(g&&w.since>ws?w.since:ws)} 起至 ${dfmt(H.date)} 收盤 · 還原後日線</span></div>${tr}
+   <div class="pos3"><div><small>52 週低點</small><strong class="down">${fmt(w.lo)}</strong><em>${dfmt(w.loD)} · 收盤距低點 +${fmt(w.dLo,1)}%</em></div><div><small>收盤價</small><strong>${fmt(close)}</strong><em>位於 52 週區間 ${w.pos==null?'—':fmt(w.pos,1)+'%'}</em></div><div><small>52 週高點</small><strong class="up">${fmt(w.hi)}</strong><em>${dfmt(w.hiD)} · 收盤距高點 ${fmt(w.dHi,1)}%</em></div></div>
+   ${m200!=null?`<p class="rc-note sep" style="margin-bottom:0">年線（MA200）${fmt(m200)}，收盤${close>=m200?'在年線之上':'在年線之下'} ${fmt(Math.abs((close/m200-1)*100),1)}%。</p>`:`<p class="rc-note sep" style="margin-bottom:0">年線（MA200）資料不足（僅 ${H.n200} 個交易日），不提供。</p>`}
+   <p class="rc-note" style="margin-bottom:0">52 週＝最近交易日往前 364 天內的最高價／最低價（日線盤中高低，非收盤）；位置＝(收盤−低點)÷(高點−低點)，0% 在低點、100% 在高點。${g?`疑似未還原事件日（${dfmt(w.since)}）以前的價格不納入。`:''}重大除權已依官方資料還原，一般現金除息不還原，故高低點可能含除息缺口。來源：${s.market==='上市'?'證交所 MI_INDEX／STOCK_DAY':'櫃買中心 dailyQuotes／tradingStock'} 日線，本站計算。</p></div>`;}
 function posTrack(s,L){const s1=L&&L.support[0],r1=L&&L.resistance[0],close=s.close;if(!s1||!r1||r1.price<=s1.price)return '';
   const pos=(close-s1.price)/(r1.price-s1.price)*100;
   return `<div class="rcard postrack"><div class="rc-head"><h3>收盤在支撐與壓力之間的位置</h3><span>第一支撐 → 第一壓力</span></div><div class="track"><i style="left:${Math.max(0,Math.min(100,pos))}%"></i></div>
@@ -868,6 +878,7 @@ function verdictRows(s,H,C,E){
     else if(above){sc=0;sh='趨勢待確認';tx=hot?'站上月線但均線尚未多頭排列，且短線過熱，趨勢待確認。':'站上月線，但均線尚未多頭排列，趨勢待確認。';}
     else if(bear){sc=-1;sh='趨勢偏空';tx='趨勢偏空，收盤在月線之下且均線空頭排列。';}
     else{sc=-1;sh='跌破月線';tx='收盤在月線之下，短線轉弱，要等重新站回月線。';}
+    if(H.ma200!=null)tx+=close>=H.ma200?'收盤在年線（200 日線）之上，長期趨勢仍有支撐。':'收盤仍在年線（200 日線）之下，長期趨勢尚未翻多。';
     D.trend=['走勢',tx,sc,sh];
   }
   // 價位

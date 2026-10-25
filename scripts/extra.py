@@ -294,6 +294,7 @@ def chipsum():
 
 # ============ 6. 疑似未還原價格偵測（單日 |漲跌| > 11%） ============
 GAP_TH = 0.11
+GX_BUDGET = 420   # 秒：每次最多花多久查新的除權息日（斷點續跑靠 snapshots/chips/gx_*.json 快取）
 def _exday(d):
     """該日的除權息計算結果（證交所 TWT49U、櫃買 exDailyQ）：{代號:[除權息前收盤價, 參考價]}；來源取不到回傳 None（不快取）。"""
     out = {}; ok = False
@@ -325,8 +326,9 @@ def gaps():
             if r[i][4] and r[i-1][4] and abs(r[i][4] / r[i-1][4] - 1) > GAP_TH: ev.append(i)
         cand[h["code"]] = (f, h, ev)
     dates = sorted({cand[c][1]["rows"][i][0] for c in cand for i in cand[c][2]})
-    ex = {}
+    ex = {}; t0 = time.time()
     for d in dates:
+        if time.time() - t0 > GX_BUDGET and not (CACHE / f"gx_{d}.json").exists(): continue    # 預算：新日期查詢超過上限就先略過（該日顯示「官方資料當日取不到」，下次續查；已快取的日期不受影響）
         v = cached(f"gx_{d}.json", lambda: _exday(d))
         if v is not None: ex[d] = v
     summary = {}
@@ -851,8 +853,40 @@ def macro():
     wjson("macro.json", out)
     print("macro ok", "fx", (out.get("fx") or {}).get("days", [None])[-1:], "ust", (out.get("ust") or {}).get("days", [None])[-1:], "cbc", (out.get("cbc") or {}).get("d"))
 
+# ============ 第三批：200 日線（年線）與 52 週高低（由歷史價量計算，不連網；失敗保留前次檔案） ============
+def _h52(h):
+    """h：history/<代號>.json 內容。回傳要併入的欄位。
+    - 疑似未還原事件（gaps.suspect）：只用事件日（含）之後的資料，不跨越跳空（與 MA5/20/60 的處理一致）。
+    - MA200：需 ≥ 200 個交易日，不足為 None。
+    - 52 週＝最近一個交易日往前 364 天；資料起日晚於視窗起點 + 7 天者視為「歷史不足」(ok52=False)，高低點改標「資料起日以來」。"""
+    r = h["rows"]; g = h.get("gaps") or {}
+    st = next((i for i in range(len(r)) if r[i][0] == g.get("since")), 0) if g.get("suspect") else 0
+    p = r[st:]; n = len(p)
+    if not n: return None
+    last = p[-1][0]; ws = (dt.date.fromisoformat(last) - dt.timedelta(days=364)).isoformat()
+    w = [x for x in p if x[0] >= ws]
+    hi = max(w, key=lambda x: x[2]); lo = min(w, key=lambda x: x[3])
+    ok = dt.date.fromisoformat(p[0][0]) <= dt.date.fromisoformat(ws) + dt.timedelta(days=7)
+    cl = [x[4] for x in p]; c = cl[-1]
+    return dict(ma200=round(sum(cl[-200:]) / 200, 2) if n >= 200 else None, n200=n,
+                w52=dict(hi=hi[2], hiD=hi[0], lo=lo[3], loD=lo[0], n=len(w), first=p[0][0], ok=ok, since=g.get("since") if g.get("suspect") else None,
+                         pos=round((c - lo[3]) / (hi[2] - lo[3]) * 100, 1) if hi[2] > lo[3] else None,
+                         dHi=round((c / hi[2] - 1) * 100, 1), dLo=round((c / lo[3] - 1) * 100, 1)))
+
+def hist52():
+    n = bad = 0
+    for f in sorted(HIS.glob("*.json")):
+        try:
+            h = json.loads(f.read_text()); u = _h52(h)
+            if not u: continue
+            h["ma200"] = u["ma200"]; h["n200"] = u["n200"]; h["w52"] = u["w52"]
+            f.write_text(json.dumps(h, ensure_ascii=False, separators=(",", ":"))); n += 1
+        except Exception as e:
+            bad += 1; print("hist52 skip", f.name, type(e).__name__, e)
+    print("hist52 ok", n, "skip", bad)
+
 def main(which="all"):
-    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, events=events, metrics=metrics, fin=fin, dividends=dividends, valhist=valhist, tdcc=tdcc, daytrade=daytrade, market=market, taifex=taifex, macro=macro)
+    steps = dict(calendar=calendar, flags=flags, credit=credit, chipsum=chipsum, gaps=gaps, hist52=hist52, events=events, metrics=metrics, fin=fin, dividends=dividends, valhist=valhist, tdcc=tdcc, daytrade=daytrade, market=market, taifex=taifex, macro=macro)
     for k, fn in steps.items():
         if which in ("all", k):
             try: fn()

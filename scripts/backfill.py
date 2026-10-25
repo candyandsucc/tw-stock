@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """回補全市場每日行情快照（snapshots/YYYY-MM-DD_上市|上櫃.json，格式 {代號:[開,高,低,收,量(股)]}）。
 來源：證交所 MI_INDEX（帶日期）、櫃買中心 afterTrading/dailyQuotes（帶日期）。已存在的快照略過，休市日（無資料/日期不符）不寫檔。
-用法：python3 scripts/backfill.py 2026-04-15 2026-10-22"""
+用法：python3 scripts/backfill.py 2026-04-15 2026-10-22 [預算秒數]（可中斷、可重複執行：已存在的快照直接略過，從缺的日期繼續）"""
 import json, re, sys, time, datetime as dt, pathlib, urllib.request
 ROOT = pathlib.Path(__file__).resolve().parent.parent; SNAP = ROOT / "snapshots"
 UA = {"User-Agent": "Mozilla/5.0 tw-stock-lab"}; SLEEP = 1.3
@@ -43,9 +43,11 @@ def tpex(d):
         out[r[0].strip()] = [num(r[4]), num(r[5]), num(r[6]), c, num(r[8])]
     return out
 
-def main(a, b):
-    d = a
+def main(a, b, budget=None):
+    """budget：秒數上限（超過就停、已寫入的快照保留，下次同一指令從缺的日期續跑）；None＝不限。"""
+    t0 = time.time(); d = a
     while d <= b:
+        if budget and time.time() - t0 > budget: print("預算用完，下次續跑從", d, flush=True); return d
         if d.weekday() < 5:
             for mk, fn in (("上市", twse), ("上櫃", tpex)):
                 f = SNAP / f"{d.isoformat()}_{mk}.json"
@@ -56,4 +58,4 @@ def main(a, b):
         d += dt.timedelta(days=1)
 
 if __name__ == "__main__":
-    main(dt.date.fromisoformat(sys.argv[1]), dt.date.fromisoformat(sys.argv[2]))
+    main(dt.date.fromisoformat(sys.argv[1]), dt.date.fromisoformat(sys.argv[2]), float(sys.argv[3]) if len(sys.argv) > 3 else None)

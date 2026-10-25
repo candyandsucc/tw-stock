@@ -7,6 +7,8 @@ for p in (OUT, HIS, SNAP): p.mkdir(parents=True, exist_ok=True)
 UA = {"User-Agent": "Mozilla/5.0 tw-stock-lab"}
 TOP_N = int(os.environ.get("TOP_N", "30"))          # 每市場依成交金額取前 N 檔建立歷史
 MONTHS = int(os.environ.get("MONTHS", "6"))
+HIST_DAYS = int(os.environ.get("HIST_DAYS", "300"))   # 每檔歷史保留的交易日數（52 週高低與 MA200 需 ≥ 260；更早的靠全市場快照回補）
+EXR_MONTHS = int(os.environ.get("EXR_MONTHS", "17"))  # 重大除權事件回看月數（需涵蓋整段歷史）
 EXTRA = os.environ.get("EXTRA", "2330,0050,0056,00878,2317,2454,6488,5347,8299,3105,8046,2449,2344").split(",")
 SLEEP = float(os.environ.get("SLEEP", "1.3"))
 # 自選 25 檔（site/data/watchlist.json）固定納入每日歷史抓取；ONLY=代號,代號 可只補抓指定股票（補資料／測試用）
@@ -126,7 +128,7 @@ def history(s):
         if d not in rows:
             v = json.loads(f.read_text()).get(s["code"])
             if v: rows[d] = v
-    return [[d] + rows[d] for d in sorted(rows) if rows[d][3] is not None]
+    return [[d] + rows[d] for d in sorted(rows) if rows[d][3] is not None][-HIST_DAYS:]
 
 def sma(arr, n): return round(sum(arr[-n:]) / n, 2) if len(arr) >= n else None
 
@@ -143,7 +145,7 @@ if ONLY: targets = [c for c in ONLY if c in stocks]
 print("history targets", len(targets))
 import adjust, patterns
 _ref = dt.date.fromisoformat(twse_date or tpex_date)
-EVENTS = adjust.events(_ref - dt.timedelta(days=31 * MONTHS), _ref, SLEEP)   # 重大除權（參考價/前收 ≤ 0.9）
+EVENTS = adjust.events(_ref - dt.timedelta(days=31 * EXR_MONTHS), _ref, SLEEP)   # 重大除權（參考價/前收 ≤ 0.9）
 print("major ex-rights in window:", {c: [(e[0], e[1]) for e in v] for c, v in EVENTS.items() if c in targets})
 for i, code in enumerate(targets):
     s = stocks[code]; h = history(s)
