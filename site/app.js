@@ -334,22 +334,50 @@ function bindChart(){
   svg.addEventListener('keydown',e=>{if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();const cu=pinned()?CT.sel-sv.off:sv.n-1;pin(cu+(e.key==='ArrowLeft'?-1:1));}else if(e.key==='Escape')clear();});
   if(pinned())show(CT.sel-sv.off,true);
 }
-const band=b=>b.low!==b.high?`<em>價格帶 ${fmt(b.low)}–${fmt(b.high)}</em>`:'';
+const band=(b,kind)=>b.low!==b.high?`<em>價格帶 ${fmt(b.low)}–${fmt(b.high)}（取${kind==='s'?'上':'下'}緣）</em>`:'';
 const tags=b=>`<div class="tags">${b.basis.map(x=>`<i>${x}</i>`).join('')}</div>`;
+const STRC={弱:'w',中:'m',強:'s',極強:'x'};
+const strChip=b=>`<span class="strchip ${STRC[b.strength]||'w'}">${b.strength||'弱'}</span>`;
+const provChip=b=>b.prov?`<span class="provchip" title="尚未經後續 K 棒確認的近期高低點，之後可能被修正">暫定</span>`:'';
+const touchTxt=(b,kind)=>{const t=b.touch;if(!t)return '';return kind==='s'?`歷史觸及 ${t.t} 次，守住 ${t.h} 次`:`歷史觸及 ${t.t} 次，受阻 ${t.h} 次、突破 ${t.t-t.h} 次`;};
+const resoTxt=b=>b.n>1?`同帶內 ${b.n} 種不同依據同時成立；越多越可能有反應，但不保證。`:'只有 1 種依據，參考性較弱。';
 const lastTouch=(b,H)=>{if(!H)return null;for(let i=H.rows.length-1;i>=0;i--){const r=H.rows[i];if(r[2]>=b.low&&r[3]<=b.high)return r[0];}return null;};
 function bandState(b,kind,close){ // 距離統一以「帶邊緣」為基準：支撐＝帶上緣、壓力＝帶下緣
   if(kind==='s'){if(close>b.high)return {k:'above',t:`收盤在帶上方 ${fmt((close/b.high-1)*100,1)}%`,sub:'距帶上緣',cls:'ok'};if(close>=b.low)return {k:'in',t:'收盤在帶內',sub:'正在測試支撐帶',cls:'warn'};return {k:'broke',t:`已跌破 ${fmt((1-close/b.low)*100,1)}%`,sub:'距帶下緣，支撐轉弱',cls:'bad'};}
   if(close<b.low)return {k:'below',t:`收盤在帶下方 ${fmt((b.low/close-1)*100,1)}%`,sub:'距帶下緣',cls:'ok'};if(close<=b.high)return {k:'in',t:'收盤在帶內',sub:'正在測試壓力帶',cls:'warn'};return {k:'broke',t:`已突破 ${fmt((close/b.high-1)*100,1)}%`,sub:'距帶上緣，原壓力轉觀察支撐',cls:'bad'};}
 const lrow=(lab,b,kind,close,H)=>{const st=bandState(b,kind,close),lt=lastTouch(b,H);
- return `<div class="lvrow"><div><span>${lab}</span>${tags(b)}<div class="strn ${b.n>1?'multi':'single'}">${b.n>1?`多重結構（${b.n} 個結構重疊）`:'單一結構（僅 1 個，強度較弱）'}</div></div>
- <div><strong>${fmt(b.price)}</strong>${band(b)}<em class="bst ${st.cls}">${st.t}</em><em>${st.sub}</em><em>最近觸及 ${lt?dfmt(lt):'近 120 日未觸及'}</em><em>最近結構日 ${dfmt(b.last)}</em></div></div>`;};
+ return `<div class="lvrow"><div><span>${lab}</span><div class="lvchips">${strChip(b)}<span class="reson">${b.n} 招共振</span>${provChip(b)}</div>${tags(b)}<div class="strn ${b.n>1?'multi':'single'}">${resoTxt(b)}</div></div>
+ <div><strong>${fmt(b.price)}</strong>${band(b,kind)}<em class="bst ${st.cls}">${st.t}</em><em>${st.sub}</em>${b.touch?`<em>${touchTxt(b,kind)}</em>`:''}<em>最近觸及 ${lt?dfmt(lt):'近一年未觸及'}</em><em>最近結構日 ${dfmt(b.last)}</em></div></div>`;};
 const NA=(st)=>`<strong class="na">${st||'尚未形成'}</strong><p>${st==='資料不足'?'來源資料不足以計算。':'目前價格結構還沒有出現對應價位，不以公式推算補值。'}</p>`;
 function lvcards(L,cf,close,H){const S=L.support,R=L.resistance,st=L.status;
- const sup=`<div class="level support"><small>◇ 支撐觀察</small>${S.length?S.map((b,i)=>lrow(i?`第二支撐｜${b.tier}`:`${b.tier}支撐`,b,'s',close,H)).join(''):NA(st)}<p>現價之下最接近的真實結構價位；跌破後結構轉弱；距離以支撐帶上緣為基準、壓力帶以下緣為基準（收盤落在帶內時標示「在帶內」）。</p></div>`;
+ const sup=`<div class="level support"><small>◇ 支撐觀察</small>${S.length?S.map((b,i)=>lrow(i?`第二支撐｜${b.tier==='第二支撐'?(b.dist>=-10?'近端':'中期'):b.tier}`:`${b.tier}支撐`,b,'s',close,H)).join(''):NA(st)}<p>現價之下最接近的價格帶；跌破後結構轉弱。價格帶寬度依這檔股票的波動大小調整。</p></div>`;
  const r1=R[0],r2=R[1];const newHigh=!r1&&H&&close>=Math.max(...H.rows.map(r=>r[2]));
- const c1=`<div class="level resist"><small>⚡ ${cf?'關鍵突破／壓力共振區':'第一壓力'}</small>${r1?lrow(cf?'關鍵突破／壓力共振區':'第一壓力',r1,'r',close,H)+`<p>${cf?'此處同時是突破觀察位與壓力共振區，站上與否是觀察點，不是追價目標。':'現價上方最近、已確認的有效壓力結構；站上與否是觀察點，不是追價目標。'}</p>`:newHigh&&L.limits?`<strong class="na">${fmt(L.limits.up)}</strong><p>創新高，上方無歷史結構；顯示明日漲停參考價（漲跌幅限制，非結構價位）。</p>`:NA(st)}</div>`;
- const c2=`<div class="level resist"><small>🔥 第二壓力</small>${r2?lrow(r2.tier,r2,'r',close,H)+`<p>${r2.tier==='中期壓力'?'第一壓力帶之上、下一個獨立的結構已超過 +10%，保留顯示並改標為中期壓力。':'第一壓力帶之上、下一個獨立的壓力結構。'}</p>`:NA(st)}</div>`;
- return `<div class="levels l3">${sup}${c1}${c2}</div>`;}
+ const mn=(L.minorRes||[]).length?`<p class="minor">另有距現價不到 1%、依據不多的弱壓力：${L.minorRes.map(b=>fmt(b.price)).join('、')}（不列為第一壓力）</p>`:'';
+ const c1=`<div class="level resist"><small>⚡ ${cf?'關鍵突破／壓力共振區':'第一壓力'}</small>${r1?lrow(cf?'關鍵突破／壓力共振區':'第一壓力',r1,'r',close,H)+`<p>${cf?'此處同時是突破觀察位與壓力共振區，站上與否是觀察點，不是追價目標。':'現價上方最近、依據夠多的壓力帶；站上與否是觀察點，不是追價目標。'}</p>`+mn:newHigh&&L.limits?`<strong class="na">${fmt(L.limits.up)}</strong><p>創新高，上方無歷史結構；顯示明日漲停參考價（漲跌幅限制，非結構價位）。</p>`:NA(st)+mn}</div>`;
+ const c2=`<div class="level resist"><small>🔥 第二壓力</small>${r2?lrow(r2.tier,r2,'r',close,H)+`<p>第一壓力帶之上、與第一壓力隔開一段距離（依波動）的下一個獨立壓力；兩者之間的帶列在「價位分類」的其他結構價位。</p>`:NA(st)}</div>`;
+ return `<div class="levels l3">${sup}${c1}${c2}</div>`+levelClass(L,close,H);}
+/* ===== 價位分類（可展開）：把所有價位依高低排成一張階梯，標出類別、強度與共振依據 ===== */
+function levelClass(L,close,H){
+  if(!L||(!(L.support||[]).length&&!(L.resistance||[]).length&&!L.zone))return '';
+  const items=[];
+  const add=(cat,b,kind)=>{if(b)items.push({cat,b,kind});};
+  (L.midRes||[]).forEach(b=>add('中長期結構價位',b,'r'));
+  (L.minorRes||[]).forEach(b=>add('弱壓力（小字）',b,'r'));
+  (L.otherRes||[]).forEach(b=>add('其他結構價位',b,'r'));
+  (L.resistance||[]).forEach((b,i)=>add(i?'第二壓力':'第一壓力',b,'r'));
+  (L.support||[]).forEach((b,i)=>add(i?'第二支撐':'近端支撐',b,'s'));
+  add('長期結構價位（下方超過 −20%）',L.longSupport,'s');
+  items.sort((p,q)=>q.b.price-p.b.price);
+  const row=it=>{const b=it.b,k=it.kind,st=bandState(b,k,close);
+    return `<tr><td><b>${it.cat}</b>${provChip(b)}</td><td class="num"><b>${fmt(b.price)}</b>${b.low!==b.high?`<small>帶 ${fmt(b.low)}–${fmt(b.high)}</small>`:''}</td><td>${strChip(b)}<small>${b.n} 招</small></td><td class="num ${b.dist<0?'down':'up'}">${b.dist>0?'+':''}${fmt(b.dist,1)}%</td>
+    <td><details><summary>共振依據</summary><div class="tags">${b.basis.map(x=>`<i>${x}</i>`).join('')}</div><p class="rc-note">${touchTxt(b,k)||'—'}；最近結構日 ${dfmt(b.last)}。${b.prov?'此帶僅由近期尚未確認的高低點構成，標為暫定。':''}</p></details></td></tr>`;};
+  const mid=items.findIndex(it=>it.b.price<close);const rows=items.map(row);
+  const cur=`<tr class="curpx"><td colspan="5">▶ 現價 ${fmt(close)}</td></tr>`;
+  if(mid<0)rows.push(cur);else rows.splice(mid,0,cur);
+  const z=L.zone;
+  const zhtml=z?`<div class="zonebox"><div><small>布局參考區（成交量集中區）</small><b>${fmt(z.low)} – ${fmt(z.high)}</b><small>區間下緣 ${fmt(z.low)} · 區間上緣 ${fmt(z.high)} · 現價在${z.pos}</small></div><p class="rc-note">${z.note}。白話：這是最近大家最常成交的價格範圍，現價在區內代表落在多數人成交的地方，不代表會漲或跌；它是本站自行計算的參考區，不是其他網站的「結構觀察區」。</p></div>`:'';
+  return `<details class="lvclass"><summary>價位分類</summary>${zhtml}<div class="tablewrap"><table class="tdt lvt"><tr><th>類別</th><th>價位（靠近現價的一端）</th><th>共振強度</th><th>距現價</th><th></th></tr>${rows.join('')}</table></div>
+  <p class="rc-note">分類規則：壓力依「第一個距現價 ≥1% 或依據 ≥3 種」取第一壓力；第二壓力需與第一壓力帶隔開（隨波動調整，約 2%–7%）；現價上方 +10% 以外的壓力列為中長期結構價位（最多 3 個）；現價下方 −20% 以外為長期結構價位。價位皆為本站自行計算的觀察價位，不是買賣建議。</p></details>`;}
 /* ===== 進場觀察區／停損參考／風險報酬比（可切換規則；觀察價位，非買賣建議） ===== */
 let RRS={stop:1,tgt:'r1low',ent:'close'};
 const tickOf=p=>p<10?0.01:p<50?0.05:p<100?0.1:p<500?0.5:p<1000?1:5;
