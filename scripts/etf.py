@@ -348,6 +348,10 @@ def prev_days(d, k=7):
         y = x - dt.timedelta(days=i)
         if y.weekday() < 5: yield y.isoformat()
 
+def is_stale(cur, latest):
+    """過期＝沿用的資料基準日「早於最新交易日」。抓取失敗但基準日已是最新交易日（例如最新交易日之後休市、投信官網沒有新資料可抓）不算過期。"""
+    return bool(cur) and bool(latest) and cur["date"] < latest
+
 def fetch_one(code, fn, arg, canhist, latest):
     """回傳 (cur, prev, status, reason, stale)。"""
     cur = None; reason = None
@@ -388,7 +392,7 @@ def fetch_one(code, fn, arg, canhist, latest):
     if s:
         cur = json.loads(s[-1].read_text())
         olds = [json.loads(f.read_text()) for f in s[:-1]]
-        return cur, (olds[-1] if olds else None), False, reason, True
+        return cur, (olds[-1] if olds else None), False, reason, is_stale(cur, latest)
     return None, None, False, reason, False
 
 def main():
@@ -400,11 +404,11 @@ def main():
             # 同一投信已連續被來源拒絕，或整體耗時過長：本輪略過（第二輪再試），沿用舊快照
             s_ = snaps(code); cur = json.loads(s_[-1].read_text()) if s_ else None
             reason = "同投信前面連續被來源拒絕（HTTP/連線錯誤），本輪略過" if blocked.get(issuer, 0) >= 2 else "整體耗時超過 20 分鐘，本輪略過"
-            funds.append(dict(code=code, name=name, issuer=issuer, url=url, cur=cur, prev=(json.loads(s_[-2].read_text()) if len(s_) > 1 else None) if cur else None, ok=False, stale=bool(cur), reason=reason))
+            funds.append(dict(code=code, name=name, issuer=issuer, url=url, cur=cur, prev=(json.loads(s_[-2].read_text()) if len(s_) > 1 else None) if cur else None, ok=False, stale=is_stale(cur, latest), reason=reason))
             print("ETF", code, "SKIP", reason, flush=True); continue
         try: cur, prev, ok, reason, stale = fetch_one(code, fn, arg, canhist, latest)
         except Exception as e: cur = prev = None; ok = False; stale = False; reason = f"程式例外：{type(e).__name__}: {e}"
-        print("ETF", code, "OK" if ok else ("STALE " if stale else "FAIL "), cur and cur["date"], reason or "", flush=True)
+        print("ETF", code, "OK" if ok else ("STALE " if stale else ("FRESH-KEPT " if cur else "FAIL ")), cur and cur["date"], reason or "", flush=True)
         blocked[issuer] = 0 if ok else (blocked.get(issuer, 0) + 1 if reason and reason.startswith(("HTTP", "連線", "元大")) else blocked.get(issuer, 0))
         funds.append(dict(code=code, name=name, issuer=issuer, url=url, cur=cur, prev=prev, ok=ok, stale=stale, reason=reason))
         time.sleep(SLEEP)
@@ -434,8 +438,8 @@ def main():
                     date=f["cur"]["date"] if f["cur"] else None, aum=(f["cur"] or {}).get("aum"), active=f["code"].endswith("A"), prevDate=f["prev"]["date"] if f["prev"] else None,
                     n=len(f["cur"]["holdings"]) if f["cur"] else 0) for f in funds], holdings=hold_)
     (OUT / "etf.json").write_text(json.dumps(etf, ensure_ascii=False, separators=(",", ":")))
-    okn = sum(f["ok"] for f in funds); stn = sum(f["stale"] for f in funds)
-    print(f"etf done：成功 {okn} / 沿用舊資料 {stn} / 失敗 {len(funds) - okn - stn}，共 {len(funds)} 檔")
+    okn = sum(f["ok"] for f in funds); stn = sum(f["stale"] for f in funds); kept = sum(1 for f in funds if not f["ok"] and not f["stale"] and f["cur"])
+    print(f"etf done：成功 {okn} / 本輪抓取失敗但資料已是最新交易日 {kept} / 過期（基準日早於最新交易日）{stn} / 無資料 {len(funds) - okn - stn - kept}，共 {len(funds)} 檔")
 
 if __name__ == "__main__":
     try: main()

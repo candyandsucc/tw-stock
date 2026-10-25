@@ -12,3 +12,8 @@
 - `scripts/analytics.py`：情境（跌深反彈／外資撐腰／量能起飛／站穩轉強／剛站回／法人連買）、位階五級、風險檢查 → `site/data/screen.json`；門檻與說明寫在 `defs`，頁面可展開查看。生命線＝MA20。
 - `scripts/fundamentals.py`：本益比／殖利率／淨值比（證交所 BWIBBU_ALL、櫃買 tpex_mainboard_peratio_analysis）＋近 12 個月月營收（公開資訊觀測站 t21sc03）→ `site/data/fund.json`、`rev.json`；逐月快取於 `snapshots/rev/`。
 - 全站為「資料分類與觀察」，不是買賣建議；repo 不放任何個人持股資料。
+
+## ETF 持股資料狀態（`scripts/etf.py` → `site/data/etf.json`）
+- 來源為各投信官網公開持股／PCF，只收台股 4 碼持股；官網以 403 等方式拒絕自動化存取者**不繞過**。
+- 每檔三種狀態：**最新**（本輪取得，或本輪抓取失敗但沿用的基準日已是最新交易日——例如最新交易日之後休市，官網沒有更新的資料可抓，前台不標過期、不顯示警告，`reason` 僅留作內部備註）；**沿用舊資料**（`stale`＝基準日**早於**最新交易日，前台標示基準日與原因）；**無資料／未涵蓋**（從未取得，例如國泰 00878，標明原因，不補假資料）。
+- 最新交易日取自 `stocks.json` 的證交所資料日（`twseDate`）；判斷函式為 `etf.is_stale()`，前端以 `etfStale()` 再核對一次。

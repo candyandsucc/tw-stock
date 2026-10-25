@@ -499,7 +499,7 @@ function etfHolders(s,E,C){
    ${etfAggLine(s,E,C)}
    <p class="rc-note">已接入 ${new Set(F.filter(f=>f.date).map(f=>f.issuer)).size} 家投信、${F.filter(f=>f.date).length} 檔 ETF 的官方持股，比對前一個揭露日的股數增減（漲紅跌綠）。${held.length?`本股在這些 ETF 的估算持有金額合計約 ${aumFmt(total)}${noAum?`（另有 ${noAum} 檔缺規模未計入）`:''}。`:''}沒接入的 ETF 無法判定，不代表沒持有。</p>
    <div class="tabs">${['全部','增加','減少'].map(t=>`<button data-t="${t}" class="${t===etfTab?'on':''}">${t}</button>`).join('')}<button id="etfAct" class="${etfAct?'on':''}" aria-pressed="${etfAct}">只看主動式 ETF</button><span>顯示 ${R.length} / ${all.length} 筆</span></div>
-   ${R.length?`<details id="etfList" class="etfdet" ${etfOpen?'open':''}><summary>展開 ETF 名單（${R.length} 檔）</summary><div class="etfwrap"><table class="etft"><tr><th>ETF / 投信 / 基準日</th>${sortTh('權重','w',etfSort)}${sortTh('持有張數','s',etfSort)}${sortTh('估算金額','a',etfSort)}${sortTh('增減張數 / 增減幅','d',etfSort)}</tr>${R.map(r=>`<tr><td><a href="#${r.fund}" class="etflink" data-go="${r.fund}">${r.fund} ${r.f.name}</a>${r.f.active?'<span class="act">主動式</span>':''}<small>${r.f.issuer} · 基準日 ${r.f.date}${r.f.prevDate?' · 比較 '+r.f.prevDate:''}${r.f.stale?' · <b class="warn">沿用舊資料</b>':''} · <a href="${r.f.url}" target="_blank" rel="noreferrer">官網 ↗</a></small></td>
+   ${R.length?`<details id="etfList" class="etfdet" ${etfOpen?'open':''}><summary>展開 ETF 名單（${R.length} 檔）</summary><div class="etfwrap"><table class="etft"><tr><th>ETF / 投信 / 基準日</th>${sortTh('權重','w',etfSort)}${sortTh('持有張數','s',etfSort)}${sortTh('估算金額','a',etfSort)}${sortTh('增減張數 / 增減幅','d',etfSort)}</tr>${R.map(r=>`<tr><td><a href="#${r.fund}" class="etflink" data-go="${r.fund}">${r.fund} ${r.f.name}</a>${r.f.active?'<span class="act">主動式</span>':''}<small>${r.f.issuer} · 基準日 ${r.f.date}${r.f.prevDate?' · 比較 '+r.f.prevDate:''}${etfStale(r.f)?' · <b class="warn">沿用舊資料</b>':''} · <a href="${r.f.url}" target="_blank" rel="noreferrer">官網 ↗</a></small></td>
    <td>${fmt(r.weight)}%<small>${r.prevWeight==null?'—':'前期 '+fmt(r.prevWeight)+'%（'+sg(r.weight-r.prevWeight)+fmt(r.weight-r.prevWeight)+'）'}</small></td>
    <td>${lotF(r.shares)}<small>${r.shares?fmt(r.shares,0)+' 股':'已剔除'}</small></td>
    <td>${r.amt==null?'—':aumFmt(r.amt)}<small>${r.f.aum?'ETF 規模 '+aumFmt(r.f.aum):'未取得規模'}</small></td>
@@ -507,13 +507,14 @@ function etfHolders(s,E,C){
    :`<p class="rc-note">${all.length?'目前沒有符合此篩選的紀錄。':'在已成功取得的 ETF 名單中未找到本股；未接入或失敗的 ETF 無法判定。'}</p>`}
    <p class="rc-note">估算金額＝該 ETF 淨資產（投信官網公開，與持股同基準日）× 權重，是估算值，不是實際買進金額；抓不到規模的留空，不估造。股數增減含申購買回、股票分割與公司行動，不等於經理人主動買賣。預設按權重由高到低，可點欄位標題切換排序。</p></div>`;
 }
+const etfStale=f=>!!(f.stale&&f.date&&META&&META.twseDate&&f.date<META.twseDate);   // 過期＝基準日早於最新交易日；抓取失敗但基準日已是最新交易日不算過期
 function etfCoverage(E){
   const by={};E.funds.forEach(f=>(by[f.issuer]=by[f.issuer]||[]).push(f));
   const ok=E.funds.filter(f=>f.date),cmp=E.funds.filter(f=>f.prevDate);
   return `<details class="covd"><summary>資料涵蓋範圍（已接入的 ETF 清單，不一定持有本股）</summary>
    <p class="rc-note">已接入 ${Object.keys(by).length} 家投信、${E.funds.length} 檔 ETF；本次取得 ${ok.length} 檔，其中 ${cmp.length} 檔已有前一期可比較增減。以下是接入範圍，<b>不是</b>持有清單。</p>
-   <div class="cov">${Object.entries(by).map(([i,L])=>`<div class="covrow"><b>${i}</b><span class="covn">${L.filter(f=>f.date).length}/${L.length} 檔</span><div>${L.map(f=>`<a class="chip ${f.ok?'':f.stale?'stale':'bad'}" href="${f.url}" target="_blank" rel="noreferrer" title="${f.ok?'已取得':f.reason||''}">${f.code} ${f.name}<em>${f.date?f.date.slice(5)+(f.prevDate?' · 可比':' · 待下一期'):'失敗：'+(f.reason||'未知')}</em></a>`).join('')}</div></div>`).join('')}</div>
-   <p class="rc-note">來源皆為各投信官網公開的持股／申購買回清單（PCF）／資產明細，只收台股 4 碼持股；基準日是持股編製日。${E.notCovered?`尚未納入：${E.notCovered}。`:''}取得失敗者列出原因，有舊快照時沿用並標示基準日，不補假資料、不繞過存取限制。${E.updated?`抓取時間 ${E.updated.replace('T',' ').slice(0,16)}（台北）。`:''}</p></details>`;
+   <div class="cov">${Object.entries(by).map(([i,L])=>`<div class="covrow"><b>${i}</b><span class="covn">${L.filter(f=>f.date).length}/${L.length} 檔</span><div>${L.map(f=>`<a class="chip ${f.ok||(f.date&&!etfStale(f))?'':etfStale(f)?'stale':'bad'}" href="${f.url}" target="_blank" rel="noreferrer" title="${f.ok||(f.date&&!etfStale(f))?'已取得':f.reason||''}">${f.code} ${f.name}<em>${f.date?f.date.slice(5)+(f.prevDate?' · 可比':' · 待下一期'):'無資料：'+(f.reason||'未知')}</em></a>`).join('')}</div></div>`).join('')}</div>
+   <p class="rc-note">來源皆為各投信官網公開的持股／申購買回清單（PCF）／資產明細，只收台股 4 碼持股；基準日是持股編製日。${E.notCovered?`尚未納入：${E.notCovered}。`:''}取得失敗者列出原因，基準日已是最新交易日者視為最新；只有基準日早於最新交易日才會另行標註；從未取得者標明無資料。不補假資料、不繞過存取限制。${E.updated?`抓取時間 ${E.updated.replace('T',' ').slice(0,16)}（台北）。`:''}</p></details>`;
 }
 let FH=null;
 function fundHoldings(E,code){
@@ -531,7 +532,7 @@ function etfPage(s,E){
   const w=W();
   return `<div class="rcard etfpg"><div class="rc-head"><h3>持股明細</h3><span>基準日 ${f.date}${f.prevDate?` · 比較 ${f.prevDate}`:''}</span></div>
    <div class="metrics etfm"><span>投信<b>${f.issuer}</b></span><span>類型<b>${f.active?'主動式 ETF':'被動式 ETF'}</b></span><span>持股檔數<b>${held.length}</b></span><span>淨資產<b>${aumFmt(f.aum)}</b></span><span>增持／新進<b class="up">${add}${nw?`（含新進 ${nw}）`:''}</b></span><span>減持／剔除<b class="down">${cut+out}${out?`（含剔除 ${out}）`:''}</b></span></div>
-   <p class="rc-note">來源：<a href="${f.url}" target="_blank" rel="noreferrer">${f.issuer}官網公開持股 ↗</a>（基準日 ${f.date}，僅列台股 4 碼持股，期貨、現金與外國股不列入）；股價與漲跌用證交所／櫃買中心 ${dfmt(META.twseDate)} 官方收盤資料，漲紅跌綠。${f.prevDate?`增減＝基準日股數減前一個揭露日（${f.prevDate}）股數，含申購買回與公司行動，不等於經理人主動買賣。`:'<b>首次收錄，待下一期</b>：目前只有一期資料，下一個揭露日才會有增減。'}${f.stale?` <b class="warn">本次抓取失敗，沿用 ${f.date} 舊資料（${f.reason||''}）。</b>`:''}</p>
+   <p class="rc-note">來源：<a href="${f.url}" target="_blank" rel="noreferrer">${f.issuer}官網公開持股 ↗</a>（基準日 ${f.date}，僅列台股 4 碼持股，期貨、現金與外國股不列入）；股價與漲跌用證交所／櫃買中心 ${dfmt(META.twseDate)} 官方收盤資料，漲紅跌綠。${f.prevDate?`增減＝基準日股數減前一個揭露日（${f.prevDate}）股數，含申購買回與公司行動，不等於經理人主動買賣。`:'<b>首次收錄，待下一期</b>：目前只有一期資料，下一個揭露日才會有增減。'}${etfStale(f)?` <b class="warn">本次抓取失敗，沿用 ${f.date} 舊資料（${f.reason||''}）。</b>`:''}</p>
    <div class="tabs">${['全部','增加','減少'].map(t=>`<button data-pt="${t}" class="${t===etfPTab?'on':''}">${t}</button>`).join('')}<span>顯示 ${R.length} / ${rows.length} 筆${out?`（含本期剔除 ${out} 檔；現持股 ${held.length} 檔）`:''}</span></div>
    <div class="etfwrap"><table class="etft cons"><tr><th>股票</th>${sortTh('股價','c',etfPS)}${sortTh('漲跌幅','p',etfPS)}${sortTh('權重','w',etfPS)}${sortTh('持有張數','s',etfPS)}${sortTh('估算金額','a',etfPS)}${sortTh('增減張數 / 增減幅','d',etfPS)}</tr>${R.map(r=>{const x=r.x;
    return `<tr><td><span class="star ${w.includes(r.code)?'on':''}" data-cs="${r.code}" role="button" aria-label="加入自選">${w.includes(r.code)?'★':'☆'}</span><a href="#${r.code}" class="etflink" data-go="${r.code}"><b>${r.name||'（無行情資料）'}</b><small>${r.code}${x?' · '+x.market:''}</small></a></td>
