@@ -53,13 +53,14 @@ def revenue(today=None):
     today = today or dt.date.today(); ms = months(today); refresh = set(ms[-2:])
     res = {}; got = []
     for y, m in ms:
-        for mk, d in (("上市", "sii"), ("上櫃", "otc")):
-            f = REV / f"{d}_{y}{m:02d}.json"
+        # _0＝國內公司頁；_1＝外國企業（KY、DR）頁，同一張官方彙總表的另一頁，之前漏抓導致 KY／DR 股沒有月營收
+        for mk, d, k, need in (("上市", "sii", 0, 300), ("上櫃", "otc", 0, 300), ("上市", "sii", 1, 20), ("上櫃", "otc", 1, 10)):
+            f = REV / (f"{d}_{y}{m:02d}.json" if k == 0 else f"{d}f_{y}{m:02d}.json")
             if f.exists() and (y, m) not in refresh: v = json.loads(f.read_text())
             else:
-                t = raw(f"https://mopsov.twse.com.tw/nas/t21/{d}/t21sc03_{y-1911}_{m}_0.html", enc="big5hkscs"); time.sleep(SLEEP)
+                t = raw(f"https://mopsov.twse.com.tw/nas/t21/{d}/t21sc03_{y-1911}_{m}_{k}.html", enc="big5hkscs"); time.sleep(SLEEP)
                 v = parse_rev(t) if t else {}
-                if len(v) >= 300: f.write_text(json.dumps(v, ensure_ascii=False, separators=(",", ":")))
+                if len(v) >= need: f.write_text(json.dumps(v, ensure_ascii=False, separators=(",", ":")))
                 elif f.exists(): v = json.loads(f.read_text())   # 新資料不完整（尚未公布）時沿用快取
                 else: v = {}
             if v:
