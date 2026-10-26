@@ -436,11 +436,11 @@ async function pick(code){
   if(H){html+=`<div class="chartpanel"><div id="ctop">${chartTop(H)}</div>
   ${chartNotes(H)}<div class="srcline">走勢 · 資料日期 ${dfmt(H.rows[0][0])}–${dfmt(H.date)} · 來源 ${src}（${s.market==='上市'?'STOCK_DAY 個股日成交資訊':'tradingStock 個股日成交資訊'}）</div></div>
   ${grp('價位怎麼看','支撐、壓力與位階在哪（觀察價位，非買賣建議）· 依 '+dfmt(H.date)+' 收盤')}`;
-  if(L){const cf=confluence(H,L);html+=posTrack(s,L,H)+w52Card(s,H)+lvcards(L,cf,close,H)+`<div id="rrbox">${L.support&&L.support.length?rrHtml(H,L,close):''}</div>`+`<p class="note2 disclaimer">支撐與壓力為本站依歷史價格結構自行計算的觀察價位，可能與其他網站不同，不是目標價或買賣建議。</p>`+(L.limits?`<p class="note2">漲跌停參考（依漲跌幅限制，非結構價位）：明日漲停 ${fmt(L.limits.up)} · 跌停 ${fmt(L.limits.down)}</p>`:'');}
+  if(L){const cf=confluence(H,L);html+=posTrack(s,L,H)+w52Card(s,H)+lvcards(L,cf,close,H)+`<div id="rrbox">${L.support&&L.support.length?rrHtml(H,L,close):`<div class="rcard rrcard"><div class="rc-head"><h3>進場觀察區 · 停損參考 · 風險報酬比</h3><span>觀察價位，非買賣建議</span></div><p class="rc-note">下方尚無結構支撐（價格結構未形成，或已在歷史低點之下），無法計算進場觀察區、停損參考與風險報酬比；不以公式補值。</p></div>`}</div>`+`<p class="note2 disclaimer">支撐與壓力為本站依歷史價格結構自行計算的觀察價位，可能與其他網站不同，不是目標價或買賣建議。</p>`+(L.limits?`<p class="note2">漲跌停參考（依漲跌幅限制，非結構價位）：明日漲停 ${fmt(L.limits.up)} · 跌停 ${fmt(L.limits.down)}</p>`:'');}
   const P=H.patterns;if(P&&(P.trend||P.box)){const t=P.trend,b=P.box;tech+=`<div class="rcard patt"><div class="rc-head"><h3>形態偵測<small>（觀察用）</small></h3><span>依 ${dfmt(H.date)} 收盤</span></div>
    ${t?`<div class="sector-line"><span>📈 上升趨勢線（近期低點墊高）</span><b class="${t.state==='守住'?'up':'down'}">${t.state}</b><strong>線約 ${fmt(t.lineToday)}</strong></div><p class="rc-note">近 ${t.sinceDays} 日內最近 3 個波段低點 ${t.points.map(p=>dfmt(p[0]).slice(5)+' '+fmt(p[1])).join(' → ')}，趨勢線每日約 ${t.slopePct>0?'+':''}${fmt(t.slopePct)}%；收盤距趨勢線 ${t.dist>0?'+':''}${fmt(t.dist,1)}%。</p>`:''}
    ${b?`<div class="sector-line"><span>▭ 整理平台（前 ${b.days} 日區間窄）</span><b>${b.state}</b><strong>${fmt(b.low)}–${fmt(b.high)}</strong></div><p class="rc-note">不含今日的前 ${b.days} 個交易日最高 ${fmt(b.high)}、最低 ${fmt(b.low)}，區間寬度 ${fmt(b.width,1)}%。</p>`:''}
-   <p class="rc-note sep">形態為依歷史價量自動偵測的觀察標示，不是買賣訊號，也不預測突破方向；偵測規則見下方「計算方法與資料說明」。</p></div>`;}
+   <p class="rc-note sep">形態為依歷史價量自動偵測的觀察標示，不是買賣訊號，也不預測突破方向；偵測規則見下方「計算方法與資料說明」。</p></div>`;}else tech+=`<div class="rcard patt"><div class="rc-head"><h3>形態偵測<small>（觀察用）</small></h3><span>依 ${dfmt(H.date)} 收盤</span></div><p class="rc-note" style="margin:0">${P?'目前未偵測到明確的上升趨勢線或整理平台（偵測條件見下方「計算方法與資料說明」），這不代表走勢好或壞。':'此股票尚無形態偵測資料。'}</p></div>`;
   tech+=riskHtml(code,H);
   }else html+=`<div class="card"><h3>價格走勢 / 支撐壓力<span>尚無歷史</span></h3><p class="note2">此股票目前不在每日歷史抓取範圍（主要成交金額前段＋預設清單），因此暫無走勢、均線與支撐壓力（資料不足）。系統每日累積收盤快照，資料足夠後會自動顯示。</p></div>`+grp('價位怎麼看','支撐、壓力與位階在哪（觀察價位，非買賣建議）');tech+=riskHtml(code,null);
   const deep=(id,t,hint,body)=>`<div class="deepsec" id="ds-${id}"><div class="deephd"><b>${t}</b><span class="dh" id="dh-${id}">${hint}</span></div><details class="deepd"><summary>展開${t}</summary>${body}</details></div>`;
@@ -469,16 +469,27 @@ function w52Card(s,H){   // 52 週高低與位置（官方日線歷史；疑似�
    <div class="pos3"><div><small>52 週低點</small><strong class="down">${fmt(w.lo)}</strong><em>${dfmt(w.loD)} · 收盤距低點 +${fmt(w.dLo,1)}%</em></div><div><small>收盤價</small><strong>${fmt(close)}</strong><em>位於 52 週區間 ${w.pos==null?'—':fmt(w.pos,1)+'%'}</em></div><div><small>52 週高點</small><strong class="up">${fmt(w.hi)}</strong><em>${dfmt(w.hiD)} · 收盤距高點 ${fmt(w.dHi,1)}%</em></div></div>
    ${m200!=null?`<p class="rc-note sep" style="margin-bottom:0">年線（MA200）${fmt(m200)}，收盤${close>=m200?'在年線之上':'在年線之下'} ${fmt(Math.abs((close/m200-1)*100),1)}%。</p>`:`<p class="rc-note sep" style="margin-bottom:0">年線（MA200）資料不足（僅 ${H.n200} 個交易日），不提供。</p>`}
    <p class="rc-note" style="margin-bottom:0">52 週＝最近交易日往前 364 天內的最高價／最低價（日線盤中高低，非收盤）；位置＝(收盤−低點)÷(高點−低點)，0% 在低點、100% 在高點。${g?`疑似未還原事件日（${dfmt(w.since)}）以前的價格不納入。`:''}重大除權已依官方資料還原，一般現金除息不還原，故高低點可能含除息缺口。來源：${s.market==='上市'?'證交所 MI_INDEX／STOCK_DAY':'櫃買中心 dailyQuotes／tradingStock'} 日線，本站計算。</p></div>`;}
-function posTrack(s,L,H){const s1=L&&L.support[0],r1=L&&L.resistance[0],close=s.close;if(!s1)return '';
-  if(!r1){ // 上方沒有結構壓力：仍畫位置條，右端標示原因，不以公式補值
-    const nh=!!(H&&H.rows&&H.rows.length&&close>=Math.max(...H.rows.map(r=>r[2])));
-    const why=nh?'上方無壓力（創 52 週新高）':'上方尚無結構壓力',lim=L.limits?`<em>明日漲停參考 ${fmt(L.limits.up)}（非結構價位）</em>`:'';
-    return `<div class="rcard postrack"><div class="rc-head"><h3>收盤在支撐與壓力之間的位置</h3><span>第一支撐 → 第一壓力</span></div><div class="track">${nh?'<i style="left:100%"></i>':''}</div>
-   <div class="pos3"><div><small>第一支撐</small><strong class="down">${fmt(s1.price)}</strong><em>價格帶 ${fmt(s1.low)}–${fmt(s1.high)}</em></div><div><small>收盤價</small><strong>${fmt(close)}</strong><em>${nh?'已在歷史結構之上':'收盤高於第一支撐 '+fmt((close/s1.high-1)*100,1)+'%'}</em></div><div><small>第一壓力</small><strong>${why}</strong>${lim}</div></div></div>`;}
-  if(r1.price<=s1.price)return '';
-  const pos=(close-s1.price)/(r1.price-s1.price)*100;
-  return `<div class="rcard postrack"><div class="rc-head"><h3>收盤在支撐與壓力之間的位置</h3><span>第一支撐 → 第一壓力</span></div><div class="track"><i style="left:${Math.max(0,Math.min(100,pos))}%"></i></div>
-   <div class="pos3"><div><small>第一支撐</small><strong class="down">${fmt(s1.price)}</strong><em>價格帶 ${fmt(s1.low)}–${fmt(s1.high)}</em></div><div><small>收盤價</small><strong>${fmt(close)}</strong><em>位於區間 ${fmt(pos,1)}%</em></div><div><small>第一壓力</small><strong class="up">${fmt(r1.price)}</strong><em>價格帶 ${fmt(r1.low)}–${fmt(r1.high)}</em></div></div></div>`;}
+function posTrack(s,L,H){const s1=L&&L.support&&L.support[0],r1=L&&L.resistance&&L.resistance[0],close=s.close;if(!L)return '';
+  const hd=`<div class="rc-head"><h3>收盤在支撐與壓力之間的位置</h3><span>第一支撐 → 第一壓力</span></div>`;
+  if(s1&&r1&&r1.price>s1.price){
+   const pos=(close-s1.price)/(r1.price-s1.price)*100;
+   return `<div class="rcard postrack">${hd}<div class="track"><i style="left:${Math.max(0,Math.min(100,pos))}%"></i></div>
+    <div class="pos3"><div><small>第一支撐</small><strong class="down">${fmt(s1.price)}</strong><em>價格帶 ${fmt(s1.low)}–${fmt(s1.high)}</em></div><div><small>收盤價</small><strong>${fmt(close)}</strong><em>位於區間 ${fmt(pos,1)}%</em></div><div><small>第一壓力</small><strong class="up">${fmt(r1.price)}</strong><em>價格帶 ${fmt(r1.low)}–${fmt(r1.high)}</em></div></div></div>`;}
+  // 缺支撐、缺壓力或兩者同價：仍畫位置條並寫明原因，不以公式補值
+  const rows=H&&H.rows&&H.rows.length?H.rows:null;
+  const nh=!r1&&!!rows&&close>=Math.max(...rows.map(r=>r[2])),nl=!s1&&!!rows&&close<=Math.min(...rows.map(r=>r[3]));
+  if(!s1&&!r1&&!nh&&!nl)return '';
+  const lim=!r1&&L.limits?`<em>明日漲停參考 ${fmt(L.limits.up)}（非結構價位）</em>`:'';
+  const left=s1?`<strong class="down">${fmt(s1.price)}</strong><em>價格帶 ${fmt(s1.low)}–${fmt(s1.high)}</em>`:`<strong>${nl?'下方無支撐（創 52 週新低）':'下方尚無結構支撐'}</strong>`;
+  const right=r1?`<strong class="up">${fmt(r1.price)}</strong><em>價格帶 ${fmt(r1.low)}–${fmt(r1.high)}</em>`:`<strong>${nh?'上方無壓力（創 52 週新高）':'上方尚無結構壓力'}</strong>${lim}`;
+  let mid;
+  if(s1&&r1)mid=`第一支撐與第一壓力同價，無法畫出區間位置`;
+  else if(nh)mid='已在歷史結構之上';else if(nl)mid='已在歷史結構之下';
+  else if(s1){const d=(close/s1.high-1)*100;mid=d>=0?'收盤高於第一支撐 '+fmt(d,1)+'%':close>=s1.low?'收盤在第一支撐帶內':'收盤已跌破第一支撐帶';}
+  else{const d=(r1.low/close-1)*100;mid=d>=0?'收盤低於第一壓力 '+fmt(d,1)+'%':close<=r1.high?'收盤在第一壓力帶內':'收盤已站上第一壓力帶';}
+  const dot=nh?'<i style="left:100%"></i>':nl?'<i style="left:0%"></i>':'';
+  return `<div class="rcard postrack">${hd}<div class="track">${dot}</div>
+   <div class="pos3"><div><small>第一支撐</small>${left}</div><div><small>收盤價</small><strong>${fmt(close)}</strong><em>${mid}</em></div><div><small>第一壓力</small>${right}</div></div></div>`;}
 function healthCard(s){
   const o=HL&&HL.items&&HL.items[s.code];if(!HL||s.etf)return '';
   if(!o)return `<div class="rcard health"><div class="rc-head"><h3>長線體檢</h3><span>官方資料</span></div><p class="rc-note" style="margin:0">官方營收、財報與估值資料未列入此股票，無法體檢。</p></div>`;
