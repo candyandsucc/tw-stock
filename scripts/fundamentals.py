@@ -76,7 +76,7 @@ def main():
     items = {c: [[ym] + v[ym] for ym in sorted(v)] for c, v in res.items() if c in stocks}
     last = max((r[-1][0] for r in items.values()), default=None)
     (D / "rev.json").write_text(json.dumps(dict(latest=last, items=items, months=sorted({g[:6] for g in got}),
-        src="公開資訊觀測站 每月營業收入彙總表（mopsov.twse.com.tw/nas/t21/{sii|otc}/t21sc03_民國年_月_0.html）", unit="千元"), ensure_ascii=False, separators=(",", ":")))
+        src="公開資訊觀測站 每月營業收入彙總表（mopsov.twse.com.tw/nas/t21/{sii|otc}/t21sc03_民國年_月_{0 國內公司|1 外國企業 KY/DR}.html）", unit="千元"), ensure_ascii=False, separators=(",", ":")))
     print("revenue", len(items), last)
 
 if __name__ == "__main__": main()
