@@ -497,14 +497,14 @@ function healthCard(s){
   const nm={g:'綠',y:'黃',r:'紅',n:'灰'};
   const lamp=(k,t,txt)=>`<div class="hl3"><div><i class="lamp ${L[k]}"></i><b>${t}</b><span class="hlv">${nm[L[k]]}燈</span></div><p>${txt}</p></div>`;
   const gT=R?`營收年增已連續 ${R.streak} 個月（共看 ${R.n} 個月），近 3 月平均年增 ${R.avg3==null?'—':sgn(R.avg3,1)+'%'}。${{g:'成長動能強。',y:'成長動能普通。',r:'營收年增沒有持續。',n:''}[L.g]}`:'官方月營收資料未列入。';
-  const qT=o.roe!=null?`約略 ROE ${fmt(o.roe,1)}%${E?`；近四季 EPS 隱含走勢 ${sgn(E.chg,1)}%（${dfmt(E.since)} 起）`:''}${F&&F.gmChg!=null?`；毛利率較前季 ${sgn(F.gmChg,2)} 個百分點`:''}。${{g:'賺錢效率高、獲利沒有下滑。',y:'獲利體質中等。',r:'賺錢效率偏低或獲利走弱。',n:''}[L.q]}`:'本益比或淨值比不足以估算 ROE（可能虧損或未列入）。';
+  const qT=o.roe!=null?`約略 ROE ${fmt(o.roe,1)}%${E?`；近四季 EPS 隱含走勢 ${sgn(E.chg,1)}%（${dfmt(E.since)} 起）`:''}${F&&F.gmChg!=null?`；單季毛利率較前一季 ${sgn(F.gmChg,2)} 個百分點`:''}。${{g:'賺錢效率高、獲利沒有下滑。',y:'獲利體質中等。',r:'賺錢效率偏低或獲利走弱。',n:''}[L.q]}`:'本益比或淨值比不足以估算 ROE（可能虧損或未列入）。';
   const vT=V&&V.pe&&L.v!=='n'?`本益比 ${fmt(V.pe,1)} 倍，在近 ${V.n} 個交易日中位於第 ${fmt(V.pct,0)} 百分位。${{g:'相對近期偏便宜。',y:'相對近期中等。',r:'相對近期偏貴。',n:''}[L.v]}`:V&&V.pe?`本益比 ${fmt(V.pe,1)} 倍；歷史累積不足 60 個交易日，不評分位。`:'本益比不適用（虧損或未列入）。';
   const cell=(t,v,sub)=>`<div><small>${t}</small><b>${v}</b><small>${sub}</small></div>`;
   const q=F?`${F.y}Q${F.q}`:'';
   return `<div class="rcard health"><div class="rc-head"><h3>長線體檢</h3><span>三個燈號 · 官方資料</span></div>
   <div class="hl3w">${lamp('g','成長',gT)}${lamp('q','獲利體質',qT)}${lamp('v','估值',vT)}</div>
-  <div class="m4 m3h">${cell('營收連續年增',R?R.streak+' <em>個月</em>':'—',R?`最新 ${R.last}，年增 ${R.yoy==null?'—':sgn(R.yoy,1)+'%'}`:'官方未列入')}${cell('單季 EPS',F?fmt(F.eps,2)+' <em>元</em>':'—',F?`${q} · 毛利率 ${fmt(F.gm,1)}%`:'官方未列入')}${cell('近四季 EPS 隱含走勢',E?sgn(E.chg,1)+'<em>%</em>':'—',E?`收盤÷本益比：${fmt(E.then,2)} → ${fmt(E.now,2)} 元`:'資料不足')}${cell('約略 ROE',o.roe!=null?fmt(o.roe,1)+'<em>%</em>':'—','股價淨值比 ÷ 本益比')}${cell('配息連續年數',D?D.streak+' <em>年</em>':'—',D?`已存檔 ${D.years.join('、')} 年`:'官方未列入')}${cell('本益比百分位',V&&V.pct!=null&&L.v!=='n'?fmt(V.pct,0)+'<em>%</em>':'—',V?`${V.n} 日累積`:'')}</div>
-  <p class="rc-note">白話：<b>成長</b>看營收是不是一直比去年多；<b>獲利體質</b>看每投入一塊錢淨值能賺多少（ROE）、近四季獲利和毛利率有沒有下滑；<b>估值</b>看現在的本益比跟自己最近的歷史比貴不貴。${F&&(F.hist||[]).length<2?`EPS 與毛利率的逐季走勢需要多季資料，官方彙總表只提供最新一季，本站每季存檔，目前累積 ${(F.hist||[]).length} 季；配息連續年數同理，只含已存檔年度（${D?D.years.length:0} 年），不足的部分不推估。`:''}</p>
+  <div class="m4 m3h">${cell('營收連續年增',R?R.streak+' <em>個月</em>':'—',R?`最新 ${R.last}，年增 ${R.yoy==null?'—':sgn(R.yoy,1)+'%'}`:'官方未列入')}${cell('單季 EPS',F?fmt(F.eps,2)+' <em>元</em>':'—',F?`${q} 單季（${F.calc?'自算':'官方'}） · 毛利率 ${fmt(F.gm,1)}%`:'官方未列入')}${cell('近四季 EPS 隱含走勢',E?sgn(E.chg,1)+'<em>%</em>':'—',E?`收盤÷本益比：${fmt(E.then,2)} → ${fmt(E.now,2)} 元`:'資料不足')}${cell('約略 ROE',o.roe!=null?fmt(o.roe,1)+'<em>%</em>':'—','股價淨值比 ÷ 本益比')}${cell('配息連續年數',D?D.streak+' <em>年</em>':'—',D?`已存檔 ${D.years.join('、')} 年`:'官方未列入')}${cell('本益比百分位',V&&V.pct!=null&&L.v!=='n'?fmt(V.pct,0)+'<em>%</em>':'—',V?`${V.n} 日累積`:'')}</div>
+  <p class="rc-note">白話：<b>成長</b>看營收是不是一直比去年多；<b>獲利體質</b>看每投入一塊錢淨值能賺多少（ROE）、近四季獲利和毛利率有沒有下滑；<b>估值</b>看現在的本益比跟自己最近的歷史比貴不貴。${F&&(F.hist||[]).length<2?`EPS 與毛利率的逐季走勢需要多季資料，官方彙總表只提供最新一期累計，本站逐期存檔後自算單季，目前累積 ${(F.hist||[]).length} 季；配息連續年數同理，只含已存檔年度（${D?D.years.length:0} 年），不足的部分不推估。`:''}</p>
   <p class="rc-note">${esc(HL.note)}</p></div>`;}
 function chipSummary(s){
   const o=CF&&CF.items&&CF.items[s.code];if(!o||!o.l)return '';
@@ -904,19 +904,26 @@ function newsCard(s){if(!NW)return '';
   if(!L.length)return `<div class="rcard"><div class="rc-head"><h3>重大訊息</h3><span>近 30 日 · 0 則</span></div><p class="rc-note" style="margin:0">本站存檔中，近 30 日沒有 ${esc(s.name)} 的重大訊息。</p>${cover}</div>`;
   return `<div class="rcard"><div class="rc-head"><h3>重大訊息</h3><span>近 30 日 · ${L.length} 則 · 公開資訊觀測站</span></div><div class="nwl">${L.slice(0,8).map(r=>`<div class="nwi"><div class="nwh"><b>${dfmt(r[0])}</b> <small>${esc(r[1]).replace(/^(\d\d)(\d\d)(\d\d)$/,'$1:$2')}</small>${r[3]?`<span class="tag">${esc(r[3])}</span>`:''}</div><div class="nws">${esc(r[2])}</div>${r[5]?`<details><summary>說明摘要</summary><p class="rc-note nwb">${esc(r[5])}${r[4]?`（事實發生日 ${dfmt(r[4])}）`:''}</p></details>`:''}</div>`).join('')}</div>${L.length>8?`<p class="rc-note">另有 ${L.length-8} 則較早的重大訊息未列出。</p>`:''}${cover}</div>`;}
 const Q_DL={1:[0,'05-15'],2:[0,'08-14'],3:[0,'11-14'],4:[1,'03-31']};
-function finCard(s){if(!FI)return '';const r=FI.items[s.code];
-  if(!r||!r.length){return s.etf?'':`<div class="rcard"><div class="rc-head"><h3>財報獲利</h3><span>官方資料 ${dfmt(FI&&FI.asof)}</span></div><p class="rc-note" style="margin:0">官方彙總表（營益分析、綜合損益表）未列入此股。<a href="https://mops.twse.com.tw/mops/web/t163sb04" target="_blank" rel="noreferrer">公開資訊觀測站 ↗</a></p></div>`;}
-  const [y,q,rev,gm,om,nm,eps]=r[0],pc=v=>v==null?'—':fmt(v,2)+'<em>%</em>',mk=(a,b)=>b===4?`${a+1}-03-31`:`${a}-${Q_DL[b][1]}`;
+const FIN_PER={1:'1–3 月（第一季）',2:'1–6 月（上半年）',3:'1–9 月（前三季）',4:'1–12 月（全年）'},FIN_QM={1:'1–3 月',2:'4–6 月',3:'7–9 月',4:'10–12 月'};
+function finCard(s){if(!FI)return '';const r=FI.items[s.code]||[],cu=(FI.cum&&FI.cum[s.code])||[];
+  if(!r.length&&!cu.length){return s.etf?'':`<div class="rcard"><div class="rc-head"><h3>財報獲利</h3><span>官方資料 ${dfmt(FI&&FI.asof)}</span></div><p class="rc-note" style="margin:0">官方彙總表（營益分析、綜合損益表）未列入此股。<a href="https://mops.twse.com.tw/mops/web/t163sb04" target="_blank" rel="noreferrer">公開資訊觀測站 ↗</a></p></div>`;}
+  const top=r[0]&&(!cu[0]||(r[0][0]===cu[0][0]&&r[0][1]===cu[0][1]))?r[0]:null,row=top||cu[0],[y,q,rev,gm,om,nm,eps]=row,calc=top&&top[8]===1;
+  const kind=top?`單季（${calc?'自算':'官方'}）`:`累計（${FIN_PER[q]}）`,ad=FI.asofBy&&FI.asofBy[y+'Q'+q],adate=ad&&ad.asof||FI.asof;
+  const pc=v=>v==null?'—':fmt(v,2)+'<em>%</em>',mk=(a,b)=>b===4?`${a+1}-03-31`:`${a}-${Q_DL[b][1]}`;
   const dl=mk(y,q),nq=q===4?[y+1,1]:[y,q+1],ndl=nq[1]===4?`${nq[0]+1}-03-31`:`${nq[0]}-${Q_DL[nq[1]][1]}`;
   const n4=r.filter((x,i)=>i<4&&x[6]!=null).length,seq=r.slice(0,4).every((x,i)=>i===0||(()=>{const p=r[i-1];return (p[0]*4+p[1])-(x[0]*4+x[1])===1;})());
-  const ttm=n4===4&&seq?r.slice(0,4).reduce((a,x)=>a+x[6],0):null;
-  return `<div class="rcard"><div class="rc-head"><h3>財報獲利 · ${y} 年第 ${q} 季</h3><span>單季 · 官方彙總表更新 ${dfmt(FI.asof)}</span></div>
-  <div class="m4"><div><small>每股盈餘 EPS</small><b class="${cls(eps)}">${eps==null?'—':fmt(eps,2)}<em> 元</em></b><small>單季（基本）</small></div><div><small>毛利率</small><b>${pc(gm)}</b><small>營業毛利 ÷ 營收</small></div><div><small>營益率</small><b class="${cls(om)}">${pc(om)}</b><small>營業利益 ÷ 營收</small></div><div><small>稅後淨利率</small><b class="${cls(nm)}">${pc(nm)}</b><small>營收 ${rev==null?'—':fmt(rev/1e2,2)} 億元</small></div></div>
-  <div class="kvl"><span>近四季 EPS 合計</span><b>${ttm!=null?fmt(ttm,2)+' 元':'累積中'}</b><strong>${ttm!=null?'':`已存 ${r.length} 季，滿 4 季起計算`}</strong></div>
-  <div class="kvl"><span>財報期別與申報期限</span><b>${y}Q${q} → ${dfmt(dl)}</b><strong>下一期 ${nq[0]}Q${nq[1]} 期限 ${dfmt(ndl)}</strong></div>
+  const ttm=n4===4&&seq?r.slice(0,4).reduce((a,x)=>a+x[6],0):null,c0=cu[0]&&cu[0][0]===y&&cu[0][1]===q?cu[0]:null;
+  const cumRow=c0&&q>1?`<div class="kvl"><span>累計（${FIN_PER[q]}）</span><b>EPS ${c0[6]==null?'—':fmt(c0[6],2)} 元</b><strong>毛利率 ${c0[3]==null?'—':fmt(c0[3],2)}% · 營益率 ${c0[4]==null?'—':fmt(c0[4],2)}% · 淨利率 ${c0[5]==null?'—':fmt(c0[5],2)}% · 營收 ${c0[2]==null?'—':fmt(c0[2]/1e2,2)} 億（官方累計）</strong></div>`:'';
+  const noS=top?'':`<p class="rc-note">這檔缺少上一期累計數字，無法自算單季，上方顯示的是官方累計（${FIN_PER[q]}），不是單季。</p>`;
+  return `<div class="rcard"><div class="rc-head"><h3>財報獲利 · ${y} 年第 ${q} 季</h3><span>${kind} · ${y} 年 ${FIN_QM[q]} · 官方彙總表更新 ${dfmt(adate)}</span></div>
+  <div class="m4"><div><small>每股盈餘 EPS</small><b class="${cls(eps)}">${eps==null?'—':fmt(eps,2)}<em> 元</em></b><small>${kind}（基本）</small></div><div><small>毛利率</small><b>${pc(gm)}</b><small>營業毛利 ÷ 營收</small></div><div><small>營益率</small><b class="${cls(om)}">${pc(om)}</b><small>營業利益 ÷ 營收</small></div><div><small>稅後淨利率</small><b class="${cls(nm)}">${pc(nm)}</b><small>營收 ${rev==null?'—':fmt(rev/1e2,2)} 億元</small></div></div>
+  ${cumRow}${noS}
+  <div class="kvl"><span>近四季 EPS 合計</span><b>${ttm!=null?fmt(ttm,2)+' 元':'累積中'}</b><strong>${ttm!=null?'四個單季相加':`已存 ${r.length} 季，滿 4 季起計算`}</strong></div>
+  <div class="kvl"><span>財報期別與申報期限</span><b>${y}Q${q}（${FIN_QM[q]}）→ ${dfmt(dl)}</b><strong>下一期 ${nq[0]}Q${nq[1]} 期限 ${dfmt(ndl)}</strong></div>
   <p class="rc-note">期限為證交法規定的一般公司申報截止日（金融保險等行業期限不同，實際公告日以公開資訊觀測站為準）；官方彙總表不提供個股實際公告日，故這裡不標「公告日」。</p>
-  ${r.length>1?`<details><summary>已存檔的各季（${r.length} 季）</summary><table><tr><th>季別</th><th>EPS</th><th>毛利率</th><th>營益率</th><th>淨利率</th><th>營收（億）</th></tr>${r.map(x=>`<tr><td>${x[0]}Q${x[1]}</td><td>${fmt(x[6],2)}</td><td>${fmt(x[3],2)}%</td><td>${fmt(x[4],2)}%</td><td>${fmt(x[5],2)}%</td><td>${x[2]==null?'—':fmt(x[2]/1e2,2)}</td></tr>`).join('')}</table></details>`:''}
-  <p class="rc-note sep">${esc(FI.note)} 來源：證交所／櫃買中心 OpenAPI（t187ap17、t187ap06 系列，原始來源為公開資訊觀測站）；已存檔 ${FI.quarters.join('、')}。</p></div>`;}
+  ${r.length>1?`<details><summary>單季各期（${r.length} 季）</summary><div style="overflow-x:auto"><table><tr><th>期間</th><th>EPS</th><th>毛利率</th><th>營益率</th><th>淨利率</th><th>營收（億）</th></tr>${r.map(x=>`<tr><td>${x[0]}Q${x[1]}<br><small>${FIN_QM[x[1]]}·${x[8]===1?'自算':'官方'}</small></td><td>${fmt(x[6],2)}</td><td>${fmt(x[3],2)}%</td><td>${fmt(x[4],2)}%</td><td>${fmt(x[5],2)}%</td><td>${x[2]==null?'—':fmt(x[2]/1e2,2)}</td></tr>`).join('')}</table></div></details>`:''}
+  ${cu.length>1?`<details><summary>官方累計各期（${cu.length} 期）</summary><div style="overflow-x:auto"><table><tr><th>累計期間</th><th>EPS</th><th>毛利率</th><th>營益率</th><th>淨利率</th><th>營收（億）</th></tr>${cu.map(x=>`<tr><td>${x[0]}Q${x[1]}<br><small>累計 ${FIN_PER[x[1]].replace(/（.*/,'')}</small></td><td>${fmt(x[6],2)}</td><td>${fmt(x[3],2)}%</td><td>${fmt(x[4],2)}%</td><td>${fmt(x[5],2)}%</td><td>${x[2]==null?'—':fmt(x[2]/1e2,2)}</td></tr>`).join('')}</table></div></details>`:''}
+  <p class="rc-note sep">${esc(FI.note)} 來源：證交所／櫃買中心 OpenAPI（t187ap17、t187ap06 系列）與公開資訊觀測站（t163sb04，補抓前期累計），皆為官方公開資料；已存檔累計期別 ${FI.quarters.join('、')}。</p></div>`;}
 const cashS=v=>v==null?'—':fmt(v,4).replace(/0+$/,'').replace(/\.$/,'');
 function divCard(s){if(!DV)return '';const o=DV.items[s.code];
   if(!o||(!o.h.length&&!o.x.length))return s.etf?'':`<div class="rcard"><div class="rc-head"><h3>股利與填息</h3><span>官方資料 ${dfmt((DV.updated||'').slice(0,10))}</span></div><p class="rc-note" style="margin:0">官方股利分派公告與近 5 個月除權息預告表皆未列入此股。</p></div>`;

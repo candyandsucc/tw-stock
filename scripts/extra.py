@@ -498,20 +498,74 @@ def _roc_iso(s):
     s = str(s or "").strip()
     return roc8(s) if re.match(r"^\d{6,7}$", s) else None
 
+def mops_cum(roc_y, season, st=None):
+    """公開資訊觀測站「綜合損益表（彙總）」t163sb04：某年度某季的【累計】數字（第 1 季=1~3 月、第 2 季=1~6 月、第 3 季=1~9 月、第 4 季=全年；單位千元，EPS 元）。
+    OpenAPI 只給最新一期，要自算單季所需的前一期累計時由這裡補抓（上市 sii＋上櫃 otc）。回傳 {代號: {R,GP,OP,NP,ni,eps,ci}}，ci=該表有營業毛利欄（一般產業）。"""
+    import urllib.parse
+    out = {}
+    def n(x):
+        x = re.sub(r"<[^>]+>", "", x).replace(",", "").replace("&nbsp;", "").strip()
+        neg = x.startswith("(") and x.endswith(")"); x = x.strip("()")
+        try: v = float(x)
+        except ValueError: return None
+        return -v if neg else v
+    for typek in ("sii", "otc"):
+        body = urllib.parse.urlencode(dict(encodeURIComponent=1, step=1, firstin=1, off=1, isQuery="Y", TYPEK=typek, year=roc_y, season="%02d" % season)).encode()
+        t = ""
+        for i in range(3):
+            try:
+                with urllib.request.urlopen(urllib.request.Request("https://mopsov.twse.com.tw/mops/web/ajax_t163sb04", data=body, headers=UA), timeout=90) as r: t = r.read().decode("utf-8", "replace")
+                if "公司代號" in t: break
+            except Exception as e:
+                print("mops retry", roc_y, season, typek, e); time.sleep(3 * (i + 1))
+        time.sleep(SLEEP)
+        for tb in re.findall(r"<table.*?</table>", t, re.S):
+            hs = [re.sub(r"<[^>]+>", "", h).strip() for h in re.findall(r"<th[^>]*>(.*?)</th>", tb, re.S)]
+            if "公司代號" not in hs: continue
+            def col(*names, pre=None):
+                for nm_ in names:
+                    if nm_ in hs: return hs.index(nm_)
+                for i, h in enumerate(hs):
+                    if pre and h.startswith(pre) and "綜合" not in h: return i
+                return None
+            gp = col("營業毛利（毛損）淨額")
+            ci = dict(R=col("營業收入", "收益", "收入"), GP=gp, OP=col("營業利益（損失）", "營業利益"), NP=col("本期淨利（淨損）", "本期稅後淨利（淨損）", pre="本期純益"),
+                      ni=col(pre="淨利（淨損）歸屬於母公司業主") if col(pre="淨利（淨損）歸屬於母公司業主") is not None else col(pre="淨利（損）歸屬於母公司業主"), eps=col("基本每股盈餘（元）"))
+            for row in re.findall(r"<tr class=.(?:odd|even).>(.*?)</tr>", tb, re.S):
+                tds = re.findall(r"<td[^>]*>(.*?)</td>", row, re.S)
+                if len(tds) != len(hs): continue
+                code = re.sub(r"<[^>]+>", "", tds[0]).strip()
+                if st is not None and code not in st: continue
+                d = {k: (n(tds[i]) if i is not None else None) for k, i in ci.items()}; d["ci"] = gp is not None
+                out[code] = d
+    return out
+
+FIN_PERIOD = {1: "1–3 月（第一季）", 2: "1–6 月（上半年）", 3: "1–9 月（前三季）", 4: "1–12 月（全年）"}
+
+def _pct(a, b):
+    return round(a / b * 100, 2) if a is not None and b else None
+
 def fin():
-    """營益分析（毛利率、營益率、淨利率：證交所 t187ap17_L、櫃買 187ap17_O）＋ 綜合損益表（EPS、淨利：t187ap06 各產業別）。單季資料；每個（年度,季別）存檔 snapshots/fin/，歷史從站台開始存檔後逐季累積。輸出 fin.json。"""
+    """財報獲利 → fin.json。
+    【重要】證交所／櫃買 OpenAPI（t187ap17 營益分析、t187ap06 綜合損益表）與公開資訊觀測站彙總表給的都是「累計」數字：第 1 季=1~3 月、第 2 季=1~6 月（上半年）、
+    第 3 季=1~9 月（前三季）、第 4 季=全年；之前把第 2 季累計誤標成「單季」。現在把兩者分開：
+      cum[代號]   = 官方累計（各期 [西元年, 季別, 營收百萬, 毛利率%, 營益率%, 稅後淨利率%, 基本EPS, 母公司淨利千元]）
+      items[代號] = 單季（第 1 季=累計本身，官方；第 2~4 季=本季累計−上一季累計，本站自算，列尾標記 1）
+    每個（民國年,季別）累計存檔 snapshots/fin/（含營收、毛利、營業利益、淨利金額供相減）；缺的前一期累計由 mops_cum() 向公開資訊觀測站補抓。"""
     FD = SNAP / "fin"; FD.mkdir(parents=True, exist_ok=True)
-    st = _stockset(); per = {}   # (y,s) -> {code: dict}
+    st = _stockset(); per = {}; asofq = {}   # (民國年,季) -> {code: dict}
     def put(code, y, q, **kw):
-        if code in st and y and q: per.setdefault((int(y), int(q)), {}).setdefault(code, {}).update(kw)
+        if code in st and y and q: per.setdefault((int(y), int(q)), {}).setdefault(code, {}).update({k: v for k, v in kw.items() if v is not None})
     a = get("https://openapi.twse.com.tw/v1/opendata/t187ap17_L"); b = get("https://www.tpex.org.tw/openapi/v1/mopsfin_187ap17_O")
     if a is None and b is None: raise RuntimeError("營益分析兩來源皆取不到")
     out_d = None
     for r in a or []:
-        out_d = out_d or roc8(r.get("出表日期"))
+        d_ = roc8(r.get("出表日期")); out_d = out_d or d_
+        if d_ and r.get("年度") and r.get("季別"): asofq[(int(r["年度"]), int(r["季別"]))] = d_
         put(str(r["公司代號"]).strip(), r.get("年度"), r.get("季別"), rev=num(r.get("營業收入(百萬元)")), gm=num(r.get("毛利率(%)(營業毛利)/(營業收入)")), om=num(r.get("營業利益率(%)(營業利益)/(營業收入)")), nm=num(r.get("稅後純益率(%)(稅後純益)/(營業收入)")))
     for r in b or []:
-        out_d = out_d or roc8(r.get("Date"))
+        d_ = roc8(r.get("Date")); out_d = out_d or d_
+        if d_ and r.get("Year") and r.get("季別"): asofq[(int(r["Year"]), int(r["季別"]))] = d_
         put(str(r["SecuritiesCompanyCode"]).strip(), r.get("Year"), r.get("季別"), rev=num(r.get("營業收入百萬元")), gm=num(r.get("毛利率")), om=num(r.get("營業利益率")), nm=num(r.get("稅後純益率")))
     def g(r, *ks):
         for k in ks:
@@ -527,19 +581,71 @@ def fin():
                 if not code: continue
                 ni = num(g(r, "淨利（淨損）歸屬於母公司業主", "淨利（損）歸屬於母公司業主", "淨利（淨損）歸屬於母公司業主"))
                 if ni is None: ni = num(g(r, "本期淨利（淨損）", "本期稅後淨利（淨損）"))
-                put(code, g(r, "年度", "Year"), g(r, "季別", "Season"), eps=num(g(r, "基本每股盈餘（元）")), ni=ni)
-    for (y, q), d in per.items():    # 逐季存檔（同一季重跑覆蓋）
-        (FD / f"{y}Q{q}.json").write_text(json.dumps(d, ensure_ascii=False, separators=(",", ":")))
-    items = {}
-    snaps = sorted((tuple(map(int, f.stem.split("Q"))), f) for f in FD.glob("*Q*.json"))
-    for (y, q), f in snaps:
-        for c, v in json.loads(f.read_text()).items():
-            items.setdefault(c, []).append([y + 1911, q, v.get("rev"), v.get("gm"), v.get("om"), v.get("nm"), v.get("eps"), v.get("ni")])
-    for c in items: items[c].sort(key=lambda r: (r[0], r[1]), reverse=True); items[c] = items[c][:12]
-    wjson("fin.json", dict(items=items, fields=["西元年", "季別", "營收(百萬元)", "毛利率%", "營益率%", "稅後淨利率%", "基本EPS(元)", "本期淨利(千元)"], asof=out_d, quarters=sorted({f"{y + 1911}Q{q}" for (y, q), _ in snaps}),
-          updated=now().isoformat(timespec="seconds"), note="單季數字（非累計）；官方彙總表只提供最新一季，本站自開始存檔起逐季累積，累積不足 4 季時不計近四季 EPS。",
-          sources=dict(twse="https://openapi.twse.com.tw/v1/opendata/t187ap17_L、t187ap06_L_*", tpex="https://www.tpex.org.tw/openapi/v1/mopsfin_187ap17_O、mopsfin_t187ap06_O_*")))
-    print("fin ok", len(items), "quarters", sorted(f"{y + 1911}Q{q}" for (y, q), _ in snaps), "asof", out_d)
+                kw = dict(eps=num(g(r, "基本每股盈餘（元）")), ni=ni)
+                if f == "ci":   # 一般產業才有毛利：存金額（千元）供之後相減自算單季
+                    kw.update(R=num(g(r, "營業收入")), GP=num(g(r, "營業毛利（毛損）淨額")), OP=num(g(r, "營業利益（損失）")), NP=num(g(r, "本期淨利（淨損）")))
+                put(code, g(r, "年度", "Year"), g(r, "季別", "Season"), **kw)
+    meta = {}
+    try: meta = json.loads((FD / "_meta.json").read_text())
+    except Exception: pass
+    for (y, q), d in per.items():    # 逐期累計存檔（同一期重跑覆蓋；既有金額欄位不被缺值蓋掉）
+        fp = FD / f"{y}Q{q}.json"
+        try: old = json.loads(fp.read_text())
+        except Exception: old = {}
+        for c, v in d.items(): old.setdefault(c, {}).update(v)
+        fp.write_text(json.dumps(old, ensure_ascii=False, separators=(",", ":")))
+        meta[f"{y}Q{q}"] = dict(asof=asofq.get((y, q)) or out_d, src="證交所／櫃買 OpenAPI")
+    # 補抓缺的前期累計（最新一期往前共 6 期，自算單季與近四季 EPS 需要）
+    have = lambda y, q: (FD / f"{y}Q{q}.json").exists()
+    if per:
+        ly, lq = max(per)
+        need = []; yy, qq = ly, lq
+        for _ in range(6):
+            need.append((yy, qq)); yy, qq = (yy, qq - 1) if qq > 1 else (yy - 1, 4)
+        for (yy, qq) in reversed(need):
+            if have(yy, qq): continue
+            try:
+                m = mops_cum(yy, qq, st)
+                if len(m) < 500: print("fin 補抓", yy, qq, "筆數過少，略過", len(m)); continue
+                snap = {}
+                for c, v in m.items():
+                    o = {k: v[k] for k in ("eps", "ni") if v.get(k) is not None}
+                    if v.get("NP") is not None: o["NP"] = v["NP"]
+                    if v.get("ci"):
+                        for k in ("R", "GP", "OP"):
+                            if v.get(k) is not None: o[k] = v[k]
+                        if v.get("R"):
+                            o["rev"] = round(v["R"] / 1000, 2); o["gm"] = _pct(v.get("GP"), v["R"]); o["om"] = _pct(v.get("OP"), v["R"]); o["nm"] = _pct(v.get("NP"), v["R"])
+                    snap[c] = o
+                (FD / f"{yy}Q{qq}.json").write_text(json.dumps(snap, ensure_ascii=False, separators=(",", ":")))
+                meta[f"{yy}Q{qq}"] = dict(asof=now().date().isoformat(), src="公開資訊觀測站 t163sb04（補抓前期累計，利潤率由金額自算）")
+                print("fin 補抓前期累計", yy, qq, len(snap))
+            except Exception as e: print("fin 補抓失敗", yy, qq, type(e).__name__, e)
+    (FD / "_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=0))
+    snaps = {tuple(map(int, f.stem.split("Q"))): json.loads(f.read_text()) for f in FD.glob("*Q*.json")}
+    cum = {}; items = {}
+    for (y, q) in sorted(snaps, reverse=True):
+        for c, v in snaps[(y, q)].items():
+            cum.setdefault(c, []).append([y + 1911, q, v.get("rev"), v.get("gm"), v.get("om"), v.get("nm"), v.get("eps"), v.get("ni")])
+            # 單季
+            if q == 1: s_ = dict(rev=v.get("rev"), gm=v.get("gm"), om=v.get("om"), nm=v.get("nm"), eps=v.get("eps"), ni=v.get("ni")); calc = 0
+            else:
+                p = (snaps.get((y, q - 1)) or {}).get(c)
+                if not p: continue   # 缺上一期累計，無法自算單季（不補假資料）
+                sub = lambda k: (v[k] - p[k]) if v.get(k) is not None and p.get(k) is not None else None
+                dR, dGP, dOP, dNP = sub("R"), sub("GP"), sub("OP"), sub("NP")
+                de = sub("eps"); dn = sub("ni")
+                s_ = dict(rev=round(dR / 1000, 2) if dR is not None else None, gm=_pct(dGP, dR), om=_pct(dOP, dR), nm=_pct(dNP, dR), eps=round(de, 2) if de is not None else None, ni=dn); calc = 1
+            items.setdefault(c, []).append([y + 1911, q, s_["rev"], s_["gm"], s_["om"], s_["nm"], s_["eps"], s_["ni"], calc])
+    for c in cum: cum[c] = cum[c][:8]
+    for c in items: items[c] = items[c][:12]
+    wjson("fin.json", dict(items=items, cum=cum, fields=["西元年", "季別", "營收(百萬元)", "毛利率%", "營益率%", "稅後淨利率%", "基本EPS(元)", "母公司淨利(千元)", "單季來源(0=官方,1=自算)"],
+          cumFields=["西元年", "累計至季別", "營收(百萬元)", "毛利率%", "營益率%", "稅後淨利率%", "基本EPS(元)", "母公司淨利(千元)"],
+          periods={str(k): v for k, v in FIN_PERIOD.items()}, asof=out_d, asofBy={f"{y + 1911}Q{q}": meta.get(f"{y}Q{q}") for (y, q) in sorted(snaps) if meta.get(f"{y}Q{q}")},
+          quarters=sorted({f"{y + 1911}Q{q}" for (y, q) in snaps}), updated=now().isoformat(timespec="seconds"),
+          note="官方彙總表（證交所／櫃買 OpenAPI、公開資訊觀測站）給的是「累計」數字：第 1 季＝1~3 月、第 2 季＝1~6 月（上半年）、第 3 季＝1~9 月、第 4 季＝全年。本站「單季」：第 1 季＝累計本身（官方）；第 2~4 季＝本季累計減上一季累計（自算；EPS 因股數加權差異可能與公司單季公告差 0.01~0.1 元）。缺上一期累計時不自算、不補假資料。",
+          sources=dict(twse="https://openapi.twse.com.tw/v1/opendata/t187ap17_L、t187ap06_L_*", tpex="https://www.tpex.org.tw/openapi/v1/mopsfin_187ap17_O、mopsfin_t187ap06_O_*", mops="https://mopsov.twse.com.tw/mops/web/t163sb04（補抓前期累計）")))
+    print("fin ok", len(items), "cum", len(cum), "periods", sorted(f"{y + 1911}Q{q}" for (y, q) in snaps), "asof", out_d)
 
 def _fnum(x):
     v = num(x); return v if v is not None else 0.0
@@ -806,7 +912,7 @@ def levellog():
 
 # ============ 階段4：長線體檢（純計算＋逐年累積，不連網；失敗由 main 容錯） ============
 def health():
-    """長線體檢 → health.json。營收連續年增月數（rev.json，公開資訊觀測站月營收）、單季 EPS／毛利率（fin.json，官方彙總表只提供最新一季，逐季存檔累積）、
+    """長線體檢 → health.json。營收連續年增月數（rev.json，公開資訊觀測站月營收）、單季 EPS／毛利率（fin.json：官方累計相減自算的單季；第 1 季為官方單季）、
     近四季 EPS 隱含走勢（收盤÷本益比，BWIBBU 逐日）、ROE 約略值（股價淨值比÷本益比）、配息連續年數（div.json 逐年累積在 snapshots/health/divyears.json）、估值百分位（valhist.json）。
     三個燈號：成長（營收連續年增）、獲利體質（ROE、EPS 走勢、毛利率）、估值（本益比百分位）；綠／黃／紅／灰，皆為觀察標示。"""
     HD = SNAP / "health"; HD.mkdir(parents=True, exist_ok=True)
@@ -840,11 +946,12 @@ def health():
                 else: break
             last3 = [v for v in yoy[-3:] if v is not None]
             o["rev"] = dict(streak=k, n=len(yoy), last=r[-1][0], yoy=yoy[-1], avg3=round(sum(last3) / len(last3), 1) if last3 else None, ser=[[x[0], x[2]] for x in r])
-        # 單季
+        # 單季（fin.json items 為「單季」、新→舊；第 1 季＝官方累計即單季，第 2~4 季＝累計相減自算，calc=1）
         q = fin["items"].get(c)
         if q:
-            qq = q[-1]; o["fin"] = dict(y=qq[0], q=qq[1], gm=qq[3], om=qq[4], nm=qq[5], eps=qq[6], hist=[[x[0], x[1], x[3], x[6]] for x in q])
-            if len(q) >= 2: o["fin"]["gmChg"] = round(q[-1][3] - q[-2][3], 2) if q[-1][3] is not None and q[-2][3] is not None else None
+            qq = q[0]; o["fin"] = dict(y=qq[0], q=qq[1], gm=qq[3], om=qq[4], nm=qq[5], eps=qq[6], calc=(qq[8] if len(qq) > 8 else 0), hist=[[x[0], x[1], x[3], x[6]] for x in q])
+            if len(q) >= 2 and (q[0][0] * 4 + q[0][1]) - (q[1][0] * 4 + q[1][1]) == 1:   # 只比相鄰兩季
+                o["fin"]["gmChg"] = round(q[0][3] - q[1][3], 2) if q[0][3] is not None and q[1][3] is not None else None
         # 估值、ROE、近四季 EPS 隱含走勢
         v = vh["items"].get(c)
         if v:
@@ -876,7 +983,7 @@ def health():
         if any(x != "n" for x in L.values()) or o.get("div"): out[c] = o
     wjson("health.json", dict(asof=now().date().isoformat(), items=out, updated=now().isoformat(timespec="seconds"),
           note="長線體檢的燈號是依固定規則的觀察標示，不是買賣建議。成長燈：營收年增連續 ≥6 個月且近 3 月平均年增 ≥10% 為綠，連續 ≥3 個月或近 3 月平均年增 ≥0 為黃，其餘紅；獲利體質燈：約略 ROE（股價淨值比÷本益比）≥10% 且近四季 EPS 隱含走勢未下滑、毛利率較前季未降超過 1 個百分點為綠，ROE <5% 或近四季 EPS 隱含走勢下滑超過 10% 為紅，其餘黃；估值燈：本益比在近期（官方可回補約 65 個交易日，逐日累積）的百分位 ≤30% 綠、≤70% 黃、>70% 紅，資料不足 60 日或虧損不評。",
-          limits="官方彙總表只提供最新一季財報與近期股利公告，EPS／毛利率逐季走勢與配息連續年數自本站存檔起逐季、逐年累積；累積不足者標示「累積中」，不補假資料。",
+          limits="官方彙總表只提供最新一期累計財報與近期股利公告，EPS／毛利率逐季走勢與配息連續年數自本站存檔起逐季、逐年累積；累積不足者標示「累積中」，不補假資料。",
           sources=dict(rev="公開資訊觀測站月營業收入彙總表", fin="證交所 t187ap17_L／t187ap06_L、櫃買 mopsfin_187ap17_O", div="證交所 t187ap45_L、櫃買 mopsfin_t187ap39_O", val="證交所 BWIBBU_d、櫃買 peQryDate")))
     print("health ok", len(out))
 
