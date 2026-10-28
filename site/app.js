@@ -1062,7 +1062,9 @@ const ppc=(chg,close)=>chg==null||close==null||!(close-chg)?null:chg/(close-chg)
 const ycls=v=>v>0?'up':v<0?'down':'flat';
 const fuS=(c,k)=>FU&&FU.items&&FU.items[c]&&FU.items[c][k];
 const fuTag=(c,k)=>{const r=fuS(c,k);return r?`<b class="${ycls(r.pct)}">${zp(r.pct,2)}</b>`:'<small>無資料</small>';};
-const fuTime=()=>FU?`期交所交易日 ${dfmt(FU.date)}，本站抓取 ${(FU.updated||'').replace('T',' ').slice(5,16)}（台北）`:'';
+const nmeta=()=>FU&&FU.night_meta;
+const nmSes=m=>m?`${m.session_start.slice(5)} → ${m.session_end.slice(5)}`:'';
+const fuTime=()=>FU?`日盤交易日 ${dfmt(FU.date)}${nmeta()?`；夜盤歸屬 ${dfmt(nmeta().for_date)}（${nmSes(nmeta())}）${nmeta().status==='ok'?'':'：無資料'}`:''}，本站抓取 ${(FU.updated||'').replace('T',' ').slice(5,16)}（台北）`:'';
 function usBlock(ths,inStock){   // 美股連動對照：只列「對應哪幾檔美股」（站內整理），不顯示任何美股個股報價或漲跌
   const L=ths.filter(t=>t.usn);if(!L.length)return '';
   return `<div class="usl"><div class="usl-h"><b>美股連動對照</b><small>對應關係為站內整理</small></div><div class="usl-b">${L.map(t=>`<span class="usi"><b>${esc(t.name)}</b> → ${esc(t.usn)}</span>`).join('')}</div>
@@ -1079,7 +1081,7 @@ function mktPage(){
   const T=[idxT('加權指數',tw,'證交所'),idxT('櫃買指數',tp,'櫃買中心'),
    tile('成交值（上市／上櫃）',tw[0]?`${val(tw,'val')}<em> 億</em>`:'無資料',tp[0]?`上櫃 ${val(tp,'val')} 億`:'',tw[1]&&tw[0]?'':'', tw[0]?`${dfmt(tw[0].d)} · 證交所／櫃買`:''),
    tile('漲跌家數（股票）',bt?`<span class="up">${bt.stk.up[0]}</span> / <span class="down">${bt.stk.dn[0]}</span>`:'無資料',bt?`上櫃 <span class="up">${bp?bp.up[0]:'—'}</span> / <span class="down">${bp?bp.dn[0]:'—'}</span>`:'',bt?'':'',bt?`${dfmt(bt.d)} · 證交所／櫃買`:''),
-   tile('台指期 夜盤',FU&&fuS('TX','night')?`${fmt(fuS('TX','night').c,0)}`:'無資料',FU&&fuS('TX','night')?`<span class="${ycls(fuS('TX','night').pct)}">${sgn(fuS('TX','night').chg,0)}（${zp(fuS('TX','night').pct,2)}）</span>`:'','',FU&&fuS('TX','night')?`交易日 ${dfmt(fuS('TX','night').d)} · 期交所`:''),
+   tile('台指期 夜盤',FU&&fuS('TX','night')?`${fmt(fuS('TX','night').c,0)}`:'無資料',FU&&fuS('TX','night')?`<span class="${ycls(fuS('TX','night').pct)}">${sgn(fuS('TX','night').chg,0)}（${zp(fuS('TX','night').pct,2)}）</span>`:'','',FU&&fuS('TX','night')?`夜盤歸屬 ${dfmt(fuS('TX','night').d)}（${nmSes(nmeta())}）· 期交所`:(nmeta()?`${dfmt(nmeta().for_date)} 夜盤官方尚未提供，不用舊資料`:'')),
    tile('台指期 日盤',FU&&fuS('TX','day')?`${fmt(fuS('TX','day').c,0)}`:'無資料',FU&&fuS('TX','day')?`<span class="${ycls(fuS('TX','day').pct)}">${sgn(fuS('TX','day').chg,0)}（${zp(fuS('TX','day').pct,2)}）</span>`:'','',FU&&fuS('TX','day')?`${dfmt(fuS('TX','day').d)} · 期交所`:''),
    tile('費半期貨 夜盤',FU&&fuS('SOF','night')?`<span class="${ycls(fuS('SOF','night').pct)}">${zp(fuS('SOF','night').pct,2)}</span>`:'無資料',FU&&fuS('SOF','night')?`那指100期 <span class="${ycls((fuS('UNF','night')||{}).pct)}">${fuS('UNF','night')?zp(fuS('UNF','night').pct,2):'無資料'}</span>`:'','',FU?`參考 · 期交所 ${dfmt(FU.date)}`:''),
    tile('美元兌新台幣',fx?fmt(la(fx.ntd),3):'無資料',fx&&lb(fx.ntd)!=null?`<span class="${ycls(la(fx.ntd)-lb(fx.ntd))}">${sgn(la(fx.ntd)-lb(fx.ntd),3)}</span>（升＝台幣貶）`:'','',fx?`${dfmt(la(fx.days))} · 期交所參考匯率`:'')];
@@ -1104,12 +1106,12 @@ function mktPage(){
    ${bt?`<p class="rc-note">上市含權證等全證券的整體市場為 上漲 ${fmt(bt.mkt.up[0],0)}／下跌 ${fmt(bt.mkt.dn[0],0)}；此處以「股票」欄為準。漲跌家數官方只給當日，本站已累積 ${nb} 日，累積足夠後再顯示走勢。</p>`:''}</div>`;}
   // 台指期
   if(FU){const tx=FU.items.TX,hx=(FU.hist||{}).TX||[];
-   const ro=(lab,r)=>r?`<tr><td><b>${lab}</b></td><td>${dfmt(r.d)}</td><td class="num">${fmt(r.o,0)}</td><td class="num">${fmt(r.h,0)}</td><td class="num">${fmt(r.l,0)}</td><td class="num"><b>${fmt(r.c,0)}</b></td><td class="num ${ycls(r.chg)}">${sgn(r.chg,0)}（${zp(r.pct,2)}）</td><td class="num">${fmt(r.v,0)}</td><td class="num">${r.oi==null?'—':fmt(r.oi,0)}</td></tr>`:`<tr><td><b>${lab}</b></td><td colspan="8"><small>無資料</small></td></tr>`;
+   const ro=(lab,r)=>r?`<tr><td><b>${lab}</b></td><td>${dfmt(r.d)}${lab.startsWith('夜盤')&&nmeta()?`<br><small>${nmSes(nmeta())}</small>`:''}</td><td class="num">${fmt(r.o,0)}</td><td class="num">${fmt(r.h,0)}</td><td class="num">${fmt(r.l,0)}</td><td class="num"><b>${fmt(r.c,0)}</b></td><td class="num ${ycls(r.chg)}">${sgn(r.chg,0)}（${zp(r.pct,2)}）</td><td class="num">${fmt(r.v,0)}</td><td class="num">${r.oi==null?'—':fmt(r.oi,0)}</td></tr>`:`<tr><td><b>${lab}</b></td><td colspan="8"><small>無資料${lab.startsWith('夜盤')&&nmeta()?`（${dfmt(nmeta().for_date)} 夜盤，${nmSes(nmeta())}，官方尚未提供）`:''}</small></td></tr>`;
    h+=`${grp('台指期夜盤與日盤','期交所臺股期貨近月契約；夜盤＝盤後交易時段、日盤＝一般交易時段')}
    <div class="rcard"><div class="rc-head"><h3>臺股期貨 近月 ${tx?tx.m:''}</h3><span>${fuTime()}</span></div>
    ${tx?`<div class="tablewrap"><table class="ov mkov"><tr><th>時段</th><th>交易日</th><th>開</th><th>高</th><th>低</th><th>收</th><th>漲跌（點／%）</th><th>成交量（口）</th><th>未平倉</th></tr>${ro('夜盤（盤後）',tx.night)}${ro('日盤（一般）',tx.day)}</table></div>
-   ${hx.length>=3?`<div class="sparks"><div><h5>日盤收盤走勢</h5>${spark(hx.map(r=>r[1]),hx.map(r=>r[0]),v=>fmt(v,0),'#4a63c9')}</div><div><h5>夜盤收盤走勢</h5>${spark(hx.map(r=>r[2]),hx.map(r=>r[0]),v=>fmt(v,0),'#c26a1c')}</div></div>`:`<p class="rc-note">走勢：累積中（官方只給最新交易日，本站已存 ${hx.length} 日，滿 3 日起顯示）。</p>`}`:'<p class="rc-note">無資料。</p>'}
-   <p class="rc-note">夜盤為前一日 15:00 至當日 05:00，屬同一交易日、在日盤之前；未平倉量夜盤不提供。來源：<a href="${FU.source}" target="_blank" rel="noreferrer">期交所 OpenAPI 期貨每日交易行情 ↗</a>。</p></div>`;
+   ${hx.length>=3?`<div class="sparks"><div><h5>日盤收盤走勢</h5>${spark(hx.filter(r=>r[1]!=null).map(r=>r[1]),hx.filter(r=>r[1]!=null).map(r=>r[0]),v=>fmt(v,0),'#4a63c9')}</div><div><h5>夜盤收盤走勢</h5>${spark(hx.filter(r=>r[2]!=null).map(r=>r[2]),hx.filter(r=>r[2]!=null).map(r=>r[0]),v=>fmt(v,0),'#c26a1c')}</div></div>`:`<p class="rc-note">走勢：累積中（官方只給最新交易日，本站已存 ${hx.length} 日，滿 3 日起顯示）。</p>`}`:'<p class="rc-note">無資料。</p>'}
+   <p class="rc-note">夜盤＝盤後交易時段（前一交易日 15:00 起至次日 05:00），期交所歸屬到下一個交易日、在該日日盤之前（連假前最後一天的夜盤歸屬連假後第一個交易日）；只採用已收盤的最新場次，官方尚未提供就顯示無資料，不用舊場次頂替；未平倉量夜盤不提供。${nmeta()&&nmeta().source?`夜盤來源：${esc(nmeta().source)}。`:''}日盤來源：<a href="${FU.source}" target="_blank" rel="noreferrer">期交所 OpenAPI 期貨每日交易行情 ↗</a>。</p></div>`;
    // 美股與國際
    const ord=['UDF','SPF','UNF','SOF','TJF','GDF','BRF'];
    const rw=c=>{const r=FU.items[c];if(!r)return `<tr><td><b>${FU.names[c]}</b></td><td colspan="5"><small>無資料</small></td></tr>`;return `<tr><td><b>${FU.names[c]}</b><small>近月 ${r.m}</small></td><td class="num">${r.night?fmt(r.night.c,r.night.c>1000?0:2):'—'}</td><td class="num">${fuTag(c,'night')}</td><td class="num">${r.day?fmt(r.day.c,r.day.c>1000?0:2):'—'}</td><td class="num">${fuTag(c,'day')}</td><td class="num"><small>${r.night?fmt(r.night.v,0):'—'} / ${r.day?fmt(r.day.v,0):'—'}</small></td></tr>`;};

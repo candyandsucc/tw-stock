@@ -1080,40 +1080,154 @@ def market():
     print("market ok", twL[-1]["d"] if twL else None, tpL[-1]["d"] if tpL else None, "breadth days", {k: len(v) for k, v in br.items()})
 
 FUT_NAMES = {"TX": "臺股期貨（台指期）", "UDF": "美國道瓊期貨", "SPF": "美國標普500期貨", "UNF": "美國那斯達克100期貨", "SOF": "美國費城半導體期貨", "TJF": "東證期貨（日本）", "GDF": "黃金期貨", "BRF": "布蘭特原油期貨"}
+def _trading_day(d):
+    """休市日程（calendar.json 的 closed＋temp）＋週末；日程缺漏時只看週末。"""
+    c = _old("calendar.json"); cl = set((c.get("closed") or {})) | set((c.get("temp") or {}))
+    return d.weekday() < 5 and d.isoformat() not in cl
+
+def _night_target(t=None):
+    """回傳（最新「已收盤」夜盤的期交所歸屬交易日 T，場次起，場次迄）。
+    期交所規則：盤後交易時段「以其交易量歸屬日期查詢」＝歸屬下一個交易日（T）；場次自 T 的前一個交易日 15:00 起、至次日 05:00 止
+    （例：10/27 15:00–10/28 05:00 歸屬 10/28；週五 15:00–週六 05:00 歸屬下週一；連假前最後交易日夜盤歸屬連假後第一個交易日）。
+    OpenAPI 的 DailyMarketReportFut 要等該交易日日盤收盤後才有 T 的資料，盤前（07:30）只會有前一個交易日，所以必須用 T 去對。"""
+    t = t or now()
+    d0 = t.date(); cand = []
+    for k in range(-12, 6):
+        d = d0 + dt.timedelta(days=k)
+        if not _trading_day(d): continue
+        p = d - dt.timedelta(days=1)
+        while not _trading_day(p): p -= dt.timedelta(days=1)
+        st = dt.datetime.combine(p, dt.time(15, 0), TZ); en = dt.datetime.combine(p + dt.timedelta(days=1), dt.time(5, 0), TZ)
+        cand.append((d, st, en))
+    done = [c for c in cand if c[2] + dt.timedelta(minutes=15) <= t]
+    return done[-1]
+
+def _tfnum(x):
+    x = str(x).replace(",", "").strip()
+    return None if x in ("", "-", "NULL", "None") else num(x)
+
+def _web_night(T, codes):
+    """期交所官網「期貨每日交易行情」盤後時段（MarketCode=1），查詢日＝歸屬日 T。查無資料回傳 {}。"""
+    out = {}
+    for c in codes:
+        body = f"queryType=2&marketCode=1&commodity_id={c}&queryDate={T:%Y/%m/%d}&MarketCode=1&commodity_idt={c}".encode()
+        html = None
+        for i in range(2):
+            try:
+                with urllib.request.urlopen(urllib.request.Request("https://www.taifex.com.tw/cht/3/futDailyMarketReport", data=body, headers=UA), timeout=25) as r:
+                    html = r.read().decode("utf-8", "ignore"); break
+            except Exception as e:
+                print("retry web", c, e); time.sleep(2 * (i + 1))
+        if not html:
+            if c == "TX": break      # 官網連臺股期貨都連不上就不再逐項重試（工作流有 15 分鐘上限）
+            continue
+        tb = re.search(r"<table.*?</table>", html, re.S | re.I)
+        if not tb: continue
+        for tr in re.findall(r"<tr.*?</tr>", tb.group(0), re.S | re.I):
+            cs = [re.sub(r"\s+", " ", re.sub(r"<[^>]+>", "", x)).strip() for x in re.findall(r"<t[dh].*?</t[dh]>", tr, re.S | re.I)]
+            if len(cs) < 15 or cs[0] != c or not re.match(r"^\d{6}$", cs[1]) or _tfnum(cs[5]) is None: continue
+            def sg(x):
+                v = _tfnum(re.sub(r"[▲▼]", "", x))
+                return None if v is None else (-abs(v) if "▼" in x else abs(v))
+            out.setdefault(c, {})[cs[1]] = dict(m=cs[1], o=_tfnum(cs[2]), h=_tfnum(cs[3]), l=_tfnum(cs[4]), c=_tfnum(cs[5]), chg=sg(cs[6]), pct=sg(cs[7]), v=_tfnum(cs[8]), oi=None, st=None)
+        if c == "TX" and "TX" not in out: break   # 查無臺股期貨盤後資料＝該歸屬日尚無夜盤
+        time.sleep(0.5)
+    res = {}
+    for c, mm in out.items():
+        mo = sorted(mm)[0]; res[c] = dict(mm[mo], d=T.isoformat())
+    return res
+
 def taifex():
-    """期交所 OpenAPI DailyMarketReportFut（期貨每日交易行情；TradingSession 分「一般」＝日盤、「盤後」＝夜盤）。取臺股期貨與期交所掛牌的美股指數期貨（道瓊、標普500、那斯達克100、費半）、東證、黃金、布蘭特原油期貨，近月契約。逐日存檔 snapshots/fut/ 累積走勢。輸出 futures.json。"""
+    """期交所期貨每日交易行情（臺股期貨與期交所掛牌的美股指數期貨、東證、黃金、布蘭特原油，近月契約）。輸出 futures.json、逐日存檔 snapshots/fut/。
+    日盤＝一般時段，取 OpenAPI 最新有資料的交易日。夜盤＝盤後時段，必須是「目前已收盤的最新夜盤」（歸屬交易日 T，見 _night_target）：
+    OpenAPI 有 T 就用；沒有就改查期交所官網 T 的盤後行情；兩者都沒有就標「無資料」，絕不拿較舊場次頂替。"""
     FD = SNAP / "fut"; FD.mkdir(parents=True, exist_ok=True)
     j = get("https://openapi.taifex.com.tw/v1/DailyMarketReportFut")
     if not j: raise RuntimeError("期貨每日交易行情取不到")
     def f(x): return None if x in (None, "", "-", "NULL") else num(x)
-    by = {}
+    by = {}   # (日期, 商品) -> 月份 -> 時段 -> 列
     for r in j:
         c = r["Contract"]
-        if c in FUT_NAMES and re.match(r"^\d{6}$", r["ContractMonth(Week)"]): by.setdefault(c, {}).setdefault(r["ContractMonth(Week)"], {})[r["TradingSession"]] = r
-    snap = {}
-    for c, mm in by.items():
-        for mo in sorted(mm):      # 近月：最近且有報價的月份
-            ss = mm[mo]
-            if any(f(r["Last"]) is not None for r in ss.values()):
-                row = {}
-                for sess, key in (("一般", "day"), ("盤後", "night")):
-                    r = ss.get(sess)
-                    if r and f(r["Last"]) is not None:
-                        row[key] = dict(d=_iso8(r["Date"]), o=f(r["Open"]), h=f(r["High"]), l=f(r["Low"]), c=f(r["Last"]), chg=f(r["Change"]), pct=num(r["%"]), v=f(r["Volume"]), oi=f(r["OpenInterest"]), st=f(r["SettlementPrice"]))
-                snap[c] = dict(m=mo, **row); break
-    dates = sorted({v[k]["d"] for v in snap.values() for k in ("day", "night") if k in v})
-    if not dates: raise RuntimeError("期貨行情無有效報價")
-    latest = dates[-1]
-    (FD / f"{latest}.json").write_text(json.dumps(snap, ensure_ascii=False, separators=(",", ":")))
+        if c in FUT_NAMES and re.match(r"^\d{6}$", r["ContractMonth(Week)"]) and _iso8(r["Date"]):
+            by.setdefault((_iso8(r["Date"]), c), {}).setdefault(r["ContractMonth(Week)"], {})[r["TradingSession"]] = r
+    def build(date):
+        snap = {}
+        for (d, c), mm in by.items():
+            if d != date: continue
+            for mo in sorted(mm):      # 近月：最近且有報價的月份
+                ss = mm[mo]
+                if any(f(r["Last"]) is not None for r in ss.values()):
+                    row = {}
+                    for sess, key in (("一般", "day"), ("盤後", "night")):
+                        r = ss.get(sess)
+                        if r and f(r["Last"]) is not None:
+                            row[key] = dict(d=date, m=mo, o=f(r["Open"]), h=f(r["High"]), l=f(r["Low"]), c=f(r["Last"]), chg=f(r["Change"]), pct=num(r["%"]), v=f(r["Volume"]), oi=f(r["OpenInterest"]), st=f(r["SettlementPrice"]))
+                    snap[c] = dict(m=mo, **row); break
+        return snap
+    api_dates = sorted({d for d, _ in by})
+    if not api_dates: raise RuntimeError("期貨行情無有效報價")
+    latest = api_dates[-1]
+    def merge_save(date, snap):
+        p = FD / f"{date}.json"
+        try: old = json.loads(p.read_text())
+        except Exception: old = {}
+        for c, v in snap.items():
+            o = old.setdefault(c, {}); o["m"] = v.get("m", o.get("m"))
+            for k in ("day", "night"):
+                if k in v: o[k] = v[k]
+        p.write_text(json.dumps(old, ensure_ascii=False, separators=(",", ":")))
+        return old
+    for d in api_dates:                     # API 回傳的每個交易日都存（日盤＋該日歸屬的夜盤）
+        s_ = build(d)
+        if s_: merge_save(d, s_)
+    # ---- 夜盤：目標＝已收盤的最新夜盤（歸屬日 T）----
+    T, st, en = _night_target()
+    nsrc, nreason = None, None
+    npart = {c: v["night"] for c, v in build(T.isoformat()).items() if "night" in v}
+    if npart: nsrc = "期交所 OpenAPI DailyMarketReportFut"
+    else:
+        try: web = _web_night(T, list(FUT_NAMES))
+        except Exception as e: web = {}; print("官網夜盤取得失敗", e)
+        if web:
+            nsrc = "期交所官網 期貨每日交易行情（盤後時段）"
+            npart = {c: dict(n, m=n["m"]) for c, n in web.items()}
+        else: nreason = f"OpenAPI 尚無 {T} 的盤後資料（最新只有 {latest}），官網也查無 {T} 的盤後行情"
+    # 核對：夜盤漲跌的基準價應等於前一個有日盤結算價的交易日結算價；對不上就不採用
+    if npart.get("TX"):
+        prev = None
+        for p in sorted(FD.glob("*.json")):
+            if p.stem < T.isoformat():
+                dd = (json.loads(p.read_text()).get("TX") or {}).get("day") or {}
+                if dd.get("st") is not None: prev = (p.stem, dd["st"])
+        n = npart["TX"]
+        if prev and n.get("c") is not None and n.get("chg") is not None and abs((n["c"] - n["chg"]) - prev[1]) > 1.0:
+            nreason = f"夜盤漲跌基準價 {n['c'] - n['chg']:.0f} 與前一交易日（{prev[0]}）結算價 {prev[1]:.0f} 不符，不採用"; npart = {}; nsrc = None
+        elif prev: n["ref"] = dict(date=prev[0], settle=prev[1])
+    if npart:
+        merge_save(T.isoformat(), {c: dict(m=n["m"], night=n) for c, n in npart.items()})
+    # ---- 輸出 ----
     for p in sorted(FD.glob("*.json"))[:-60]: p.unlink()
     hist = {}
     for p in sorted(FD.glob("*.json")):
         for c, v in json.loads(p.read_text()).items():
             hist.setdefault(c, []).append([p.stem, (v.get("day") or {}).get("c"), (v.get("night") or {}).get("c"), (v.get("day") or {}).get("pct"), (v.get("night") or {}).get("pct")])
-    wjson("futures.json", dict(date=latest, items=snap, names=FUT_NAMES, hist=hist, updated=now().isoformat(timespec="seconds"),
-          note="資料取自期交所 OpenAPI DailyMarketReportFut：「日盤」＝一般交易時段（08:45–13:45），「夜盤」＝盤後交易時段（前一日 15:00 至當日 05:00，屬同一交易日）。美股指數期貨為期交所掛牌商品（反映美股盤勢，但成交清淡，價格與美股現貨指數有基差），僅供參考，不是美股收盤指數。期貨每日行情官方只給最新交易日，走勢自本站開始存檔起逐日累積。",
+    items = {}
+    dsnap = build(latest)
+    for c in FUT_NAMES:
+        it = {}
+        if c in dsnap:
+            it["m"] = dsnap[c]["m"]
+            if "day" in dsnap[c]: it["day"] = dsnap[c]["day"]
+        if c in npart:
+            it.setdefault("m", npart[c]["m"]); it["night"] = {k: v for k, v in npart[c].items()}
+        if it: items[c] = it
+    nm = dict(for_date=T.isoformat(), session_start=st.strftime("%Y-%m-%d %H:%M"), session_end=en.strftime("%Y-%m-%d %H:%M"),
+              status="ok" if npart else "none", source=nsrc, fetched=now().isoformat(timespec="seconds"))
+    if nreason: nm["reason"] = nreason
+    wjson("futures.json", dict(date=latest, night_meta=nm, items=items, names=FUT_NAMES, hist=hist, updated=now().isoformat(timespec="seconds"),
+          note="資料取自期交所：「日盤」＝一般交易時段（08:45–13:45），取最新有資料的交易日（date 欄）；「夜盤」＝盤後交易時段（15:00 起至次日 05:00），期交所以其「歸屬交易日」（night_meta.for_date，＝下一個交易日、在該日日盤之前）為準，場次起迄見 night_meta。夜盤只採用已收盤的最新場次；OpenAPI 尚未產生時改查期交所官網，兩邊都沒有就標無資料，不用舊場次頂替。美股指數期貨為期交所掛牌商品（反映美股盤勢，但成交清淡，價格與美股現貨指數有基差），僅供參考，不是美股收盤指數。期貨每日行情官方只給最新交易日，走勢自本站開始存檔起逐日累積。",
           source="https://openapi.taifex.com.tw/v1/DailyMarketReportFut"))
-    print("taifex ok", latest, {c: (v["m"], "day" in v, "night" in v) for c, v in snap.items()})
+    print("taifex ok day", latest, "night", T, nm["status"], nsrc or nreason, {c: (v.get("m"), "day" in v, "night" in v) for c, v in items.items()})
 
 def macro():
     """匯率與美債殖利率：美元兌新台幣、日圓取自期交所「每日外幣參考匯率」（DailyForeignExchangeRates）；韓元取自中央銀行 BP01D01 日資料（央行資料更新較慢，標註實際日期）；美國公債殖利率取自美國財政部 Daily Treasury Par Yield Curve Rates（XML）。輸出 macro.json。"""
