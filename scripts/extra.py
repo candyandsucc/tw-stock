@@ -1106,11 +1106,11 @@ def _tfnum(x):
     x = str(x).replace(",", "").strip()
     return None if x in ("", "-", "NULL", "None") else num(x)
 
-def _web_night(T, codes):
-    """期交所官網「期貨每日交易行情」盤後時段（MarketCode=1），查詢日＝歸屬日 T。查無資料回傳 {}。"""
+def _web_night(T, codes, mk=1):
+    """期交所官網「期貨每日交易行情」。mk=1 盤後時段（查詢日＝歸屬日 T）；mk=0 一般時段（日盤，含結算價、未沖銷量）。查無資料回傳 {}。"""
     out = {}
     for c in codes:
-        body = f"queryType=2&marketCode=1&commodity_id={c}&queryDate={T:%Y/%m/%d}&MarketCode=1&commodity_idt={c}".encode()
+        body = f"queryType=2&marketCode={mk}&commodity_id={c}&queryDate={T:%Y/%m/%d}&MarketCode={mk}&commodity_idt={c}".encode()
         html = None
         for i in range(2):
             try:
@@ -1129,8 +1129,9 @@ def _web_night(T, codes):
             def sg(x):
                 v = _tfnum(re.sub(r"[▲▼]", "", x))
                 return None if v is None else (-abs(v) if "▼" in x else abs(v))
-            out.setdefault(c, {})[cs[1]] = dict(m=cs[1], o=_tfnum(cs[2]), h=_tfnum(cs[3]), l=_tfnum(cs[4]), c=_tfnum(cs[5]), chg=sg(cs[6]), pct=sg(cs[7]), v=_tfnum(cs[8]), oi=None, st=None)
-        if c == "TX" and "TX" not in out: break   # 查無臺股期貨盤後資料＝該歸屬日尚無夜盤
+            out.setdefault(c, {})[cs[1]] = dict(m=cs[1], o=_tfnum(cs[2]), h=_tfnum(cs[3]), l=_tfnum(cs[4]), c=_tfnum(cs[5]), chg=sg(cs[6]), pct=sg(cs[7]), v=_tfnum(cs[8]), oi=None, st=None) if mk == 1 else \
+                dict(m=cs[1], o=_tfnum(cs[2]), h=_tfnum(cs[3]), l=_tfnum(cs[4]), c=_tfnum(cs[5]), chg=sg(cs[6]), pct=sg(cs[7]), v=_tfnum(cs[9]), oi=_tfnum(cs[12]), st=_tfnum(cs[11]))
+        if c == "TX" and "TX" not in out: break   # 查無臺股期貨資料＝該歸屬日尚無夜盤
         time.sleep(0.5)
     res = {}
     for c, mm in out.items():
@@ -1182,6 +1183,16 @@ def taifex():
         if s_: merge_save(d, s_)
     # ---- 夜盤：目標＝已收盤的最新夜盤（歸屬日 T）----
     T, st, en = _night_target()
+    # 日盤補抓：夜盤 T 的基準是前一交易日 P 的日盤結算價；OpenAPI 還沒更新到 P 時，先從期交所官網一般時段補 P 的日盤
+    P = T - dt.timedelta(days=1)
+    while not _trading_day(P): P -= dt.timedelta(days=1)
+    wday = {}
+    if latest < P.isoformat():
+        try: wday = _web_night(P, list(FUT_NAMES), mk=0)
+        except Exception as e: print("官網日盤取得失敗", e)
+        if wday.get("TX"):
+            merge_save(P.isoformat(), {c: dict(m=n["m"], day=n) for c, n in wday.items()}); latest = P.isoformat()
+        else: wday = {}
     nsrc, nreason = None, None
     npart = {c: v["night"] for c, v in build(T.isoformat()).items() if "night" in v}
     if npart: nsrc = "期交所 OpenAPI DailyMarketReportFut"
@@ -1212,7 +1223,7 @@ def taifex():
         for c, v in json.loads(p.read_text()).items():
             hist.setdefault(c, []).append([p.stem, (v.get("day") or {}).get("c"), (v.get("night") or {}).get("c"), (v.get("day") or {}).get("pct"), (v.get("night") or {}).get("pct")])
     items = {}
-    dsnap = build(latest)
+    dsnap = {c: dict(m=n["m"], day=n) for c, n in wday.items()} if wday else build(latest)
     for c in FUT_NAMES:
         it = {}
         if c in dsnap:
@@ -1226,7 +1237,7 @@ def taifex():
     if nreason: nm["reason"] = nreason
     wjson("futures.json", dict(date=latest, night_meta=nm, items=items, names=FUT_NAMES, hist=hist, updated=now().isoformat(timespec="seconds"),
           note="資料取自期交所：「日盤」＝一般交易時段（08:45–13:45），取最新有資料的交易日（date 欄）；「夜盤」＝盤後交易時段（15:00 起至次日 05:00），期交所以其「歸屬交易日」（night_meta.for_date，＝下一個交易日、在該日日盤之前）為準，場次起迄見 night_meta。夜盤只採用已收盤的最新場次；OpenAPI 尚未產生時改查期交所官網，兩邊都沒有就標無資料，不用舊場次頂替。美股指數期貨為期交所掛牌商品（反映美股盤勢，但成交清淡，價格與美股現貨指數有基差），僅供參考，不是美股收盤指數。期貨每日行情官方只給最新交易日，走勢自本站開始存檔起逐日累積。",
-          source="https://openapi.taifex.com.tw/v1/DailyMarketReportFut"))
+          source="https://openapi.taifex.com.tw/v1/DailyMarketReportFut" + ("；日盤 " + latest + " 取自期交所官網 期貨每日交易行情（一般時段）" if wday else "")))
     print("taifex ok day", latest, "night", T, nm["status"], nsrc or nreason, {c: (v.get("m"), "day" in v, "night" in v) for c, v in items.items()})
 
 def macro():
