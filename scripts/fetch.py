@@ -41,6 +41,8 @@ stocks = {}
 # 優先用帶日期參數的 MI_INDEX（盤後即時），並核對回應日期；OpenAPI STOCK_DAY_ALL 常延遲一天，僅作備援
 twse_date = None
 _d = dt.datetime.now(dt.timezone(dt.timedelta(hours=8))).date()
+# TARGET_DATE（market_calendar.py --target 或手動指定）：排程延遲時，從目標交易日起往回找，不依賴執行當下日期
+if os.environ.get("TARGET_DATE"): _d = dt.date.fromisoformat(os.environ["TARGET_DATE"])
 for _ in range(7):
     if _d.weekday() < 5:
         j = get(f"https://www.twse.com.tw/rwd/zh/afterTrading/MI_INDEX?date={_d:%Y%m%d}&type=ALLBUT0999&response=json"); time.sleep(SLEEP)

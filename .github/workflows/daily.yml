@@ -1,13 +1,18 @@
 name: 每日盤後更新
 on:
   schedule:
-    - cron: "0 14 * * 1-5"   # 週一至週五 台北 (UTC+8) 22:00
+    - cron: "0 14 * * 1-5"   # 週一至週五 台北 (UTC+8) 22:00（GitHub 排程常延遲數小時，故閘門改以「目標交易日」判斷，不看執行當下日期）
+    - cron: "30 0 * * 2-6"   # 備援：台北 08:30（週二至週六）。前一晚若沒跑成才會補；已處理過則自動略過
   workflow_dispatch:
     inputs:
       force:
         description: "強制更新（忽略休市日判斷）"
         type: boolean
         default: false
+      target_date:
+        description: "指定目標交易日 YYYY-MM-DD（留空＝自動找最近有資料的交易日）"
+        type: string
+        default: ""
 permissions:
   contents: write
   pages: write
@@ -26,13 +31,14 @@ jobs:
       - name: 休市日判斷（週末／國定假日／補假／颱風假則略過）
         id: gate
         run: |
-          python scripts/market_calendar.py
+          python scripts/market_calendar.py --target
           if [ "${{ inputs.force }}" = "true" ]; then echo "force=true，強制更新"; echo "trading=true" >> "$GITHUB_OUTPUT"; fi
       - name: 休市，略過更新
         if: steps.gate.outputs.trading != 'true'
         env: { REASON: "${{ steps.gate.outputs.reason }}" }
         run: echo "今日休市（$REASON），不抓資料、不 commit、不部署"
       - if: steps.gate.outputs.trading == 'true'
+        env: { TARGET_DATE: "${{ inputs.target_date || steps.gate.outputs.target }}" }
         run: python scripts/fetch.py
       - name: Commit data
         if: steps.gate.outputs.trading == 'true'
